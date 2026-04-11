@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://bpre126ivt727"]
+
+[ext_resource type="Script" uid="uid://dgsoycqieik56" path="res://PlayerCar.cs" id="1_in3s4"]
+[ext_resource type="Texture2D" uid="uid://b3ijc718wb2gw" path="res://assets/sprite/F1.png" id="2_gty54"]
+[ext_resource type="Script" uid="uid://ckxtn4pimajqi" path="res://SmoothCamera.cs" id="3_h8gag"]
+[ext_resource type="Script" path="res://TireTrail.cs" id="4_tire"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(56, 28)
+
+[node name="PlayerCar" type="CharacterBody2D" unique_id=142772476]
+script = ExtResource("1_in3s4")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
+texture_filter = 1
+rotation = 1.5707964
+texture = ExtResource("2_gty54")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1324816516]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="TireTrailL" type="Node2D" parent="."]
+position = Vector2(-20, -11)
+script = ExtResource("4_tire")
+
+[node name="TireTrailR" type="Node2D" parent="."]
+position = Vector2(-20, 11)
+script = ExtResource("4_tire")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=400778302]
+script = ExtResource("3_h8gag")
+TargetPath = NodePath("..")
