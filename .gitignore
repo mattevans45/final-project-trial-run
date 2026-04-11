@@ -1,0 +1,17 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# .NET / IDE generated
+.dotnet/
+bin/
+obj/
+.vs/
+
+# Optional local/editor noise
+*.tmp
+*.log
+
+# Large art packs (exclude from repo for now)
+assets/White/
+assets/sprite/

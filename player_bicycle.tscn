@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://bc1dmdf7nrwx7"]
+
+[ext_resource type="Script" uid="uid://busy0ffuq7dfg" path="res://PlayerBicycle.cs" id="1_pbscr"]
+[ext_resource type="Texture2D" uid="uid://b3ijc718wb2gw" path="res://assets/sprite/F1.png" id="2_vkalr"]
+[ext_resource type="Script" path="res://SmoothCamera.cs" id="3_cam"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(56, 28)
+
+[node name="PlayerBicycle" type="RigidBody2D" unique_id=974707162]
+gravity_scale = 0.0
+script = ExtResource("1_pbscr")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
+texture_filter = 1
+rotation = 1.5707964
+texture = ExtResource("2_vkalr")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1324816516]
+shape = SubResource("RectangleShape2D_1")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("3_cam")
+TargetPath = NodePath("..")

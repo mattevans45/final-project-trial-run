@@ -1,0 +1,13 @@
+1) The use of the resource is allowed for both commercial and non-commercial projects.
+2) The use of the resource for training artificial intelligence models or machine
+   learning systems is not allowed.
+3) Copying, modification, and redistribution of the resource are allowed only if the
+   original author is credited.
+4) This license may not be modified or removed.
+5) If used alongside other licenses, this license applies strictly and exclusively to
+   this resource.
+6) All resources contained in a folder, and its respective subfolders, bearing this
+   license will be considered covered by this license.
+7) Attribution in your final project (e.g., game credits) is appreciated but not required.
+8) No warranty is provided. The author is not liable for any damage resulting from the
+   use of this resource.

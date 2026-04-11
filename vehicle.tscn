@@ -1,0 +1,77 @@
+[gd_scene format=3 uid="uid://deqpi0lmmk6x8"]
+
+[ext_resource type="Script" uid="uid://b86onb2wda7i" path="res://Vehicle.cs" id="1_fouyv"]
+[ext_resource type="Texture2D" uid="uid://brqecuqxmrl2q" path="res://assets/car.png" id="2_yx515"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0ak5w"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fouyv"]
+atlas = ExtResource("2_yx515")
+region = Rect2(0, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yx515"]
+atlas = ExtResource("2_yx515")
+region = Rect2(100, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0ak5w"]
+atlas = ExtResource("2_yx515")
+region = Rect2(200, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_j5owu"]
+atlas = ExtResource("2_yx515")
+region = Rect2(300, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cgfxq"]
+atlas = ExtResource("2_yx515")
+region = Rect2(400, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_a7jys"]
+atlas = ExtResource("2_yx515")
+region = Rect2(500, 0, 100, 100)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kxndi"]
+atlas = ExtResource("2_yx515")
+region = Rect2(600, 0, 100, 100)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_lhc0k"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_yx515")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fouyv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yx515")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0ak5w")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_j5owu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cgfxq")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_a7jys")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kxndi")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[node name="Vehicle" type="CharacterBody2D" unique_id=1003265522]
+script = ExtResource("1_fouyv")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=671054830]
+shape = SubResource("RectangleShape2D_0ak5w")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1807153599]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=177246091]
+sprite_frames = SubResource("SpriteFrames_lhc0k")
