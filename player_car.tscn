@@ -1,32 +1,120 @@
-[gd_scene load_steps=5 format=3 uid="uid://bpre126ivt727"]
+[gd_scene load_steps=10 format=3 uid="uid://bpre126ivt727"]
 
 [ext_resource type="Script" uid="uid://dgsoycqieik56" path="res://PlayerCar.cs" id="1_in3s4"]
 [ext_resource type="Texture2D" uid="uid://b3ijc718wb2gw" path="res://assets/sprite/F1.png" id="2_gty54"]
-[ext_resource type="Script" uid="uid://ckxtn4pimajqi" path="res://SmoothCamera.cs" id="3_h8gag"]
-[ext_resource type="Script" path="res://TireTrail.cs" id="4_tire"]
+[ext_resource type="Shader" uid="uid://dhq4lms5ojccd" path="res://carshader.gdshader" id="3_car"]
+[ext_resource type="Shader" uid="uid://o7yfb4eu3vvo" path="res://glowsprite.gdshader" id="4_glow"]
+[ext_resource type="Shader" path="res://tire_glow.gdshader" id="5_tireglow"]
+[ext_resource type="Script" uid="uid://ckxtn4pimajqi" path="res://SmoothCamera.cs" id="6_cam"]
+[ext_resource type="Script" uid="uid://kcaxvudgukkf" path="res://TireTrail.cs" id="7_tire"]
+
+# =========================
+# MATERIALS
+# =========================
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_Car"]
+shader = ExtResource("3_car")
+shader_parameter/base_tint = Color(0.2, 0.8, 1, 1)
+shader_parameter/accent_tint = Color(1, 0.1, 0.8, 1)
+shader_parameter/glow_strength = 2.0
+shader_parameter/edge_width = 1.2
+shader_parameter/speed = 0.0
+shader_parameter/drift = 0.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_Glow"]
+shader = ExtResource("4_glow")
+shader_parameter/glow_color = Color(0, 1, 1, 1)
+shader_parameter/intensity = 2.5
+shader_parameter/speed = 0.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_TireGlow"]
+shader = ExtResource("5_tireglow")
+shader_parameter/intensity = 0.0
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(56, 28)
 
+# =========================
+# ROOT
+# =========================
+
 [node name="PlayerCar" type="CharacterBody2D" unique_id=142772476]
 script = ExtResource("1_in3s4")
 
+# =========================
+# MAIN SPRITE
+# =========================
+
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
 texture_filter = 1
+material = SubResource("ShaderMaterial_Car")
 rotation = 1.5707964
 texture = ExtResource("2_gty54")
+
+# =========================
+# OUTER GLOW
+# =========================
+
+[node name="GlowSprite" type="Sprite2D" parent="." unique_id=1618215655]
+visible = true
+z_index = -1
+texture_filter = 1
+material = SubResource("ShaderMaterial_Glow")
+rotation = 1.5707964
+scale = Vector2(1.08, 1.08)
+texture = ExtResource("2_gty54")
+
+# =========================
+# COLLISION
+# =========================
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1324816516]
 shape = SubResource("RectangleShape2D_1")
 
-[node name="TireTrailL" type="Node2D" parent="."]
-position = Vector2(-20, -11)
-script = ExtResource("4_tire")
+# =========================
+# LEFT TIRE
+# =========================
 
-[node name="TireTrailR" type="Node2D" parent="."]
+[node name="TireTrailL" type="Node2D" parent="." unique_id=1538886769]
+position = Vector2(-20, -11)
+script = ExtResource("7_tire")
+
+[node name="DriftSparks" type="GPUParticles2D" parent="TireTrailL"]
+amount = 80
+lifetime = 0.3
+one_shot = false
+explosiveness = 0.8
+emitting = false
+
+[node name="TireGlow" type="Sprite2D" parent="TireTrailL"]
+material = SubResource("ShaderMaterial_TireGlow")
+scale = Vector2(0.25, 0.25)
+texture = ExtResource("2_gty54")
+
+# =========================
+# RIGHT TIRE
+# =========================
+
+[node name="TireTrailR" type="Node2D" parent="." unique_id=109325865]
 position = Vector2(-20, 11)
-script = ExtResource("4_tire")
+script = ExtResource("7_tire")
+
+[node name="DriftSparks" type="GPUParticles2D" parent="TireTrailR"]
+amount = 80
+lifetime = 0.3
+one_shot = false
+explosiveness = 0.8
+emitting = false
+
+[node name="TireGlow" type="Sprite2D" parent="TireTrailR"]
+material = SubResource("ShaderMaterial_TireGlow")
+scale = Vector2(0.25, 0.25)
+texture = ExtResource("2_gty54")
+
+# =========================
+# CAMERA
+# =========================
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=400778302]
-script = ExtResource("3_h8gag")
+script = ExtResource("6_cam")
 TargetPath = NodePath("..")
