@@ -31,13 +31,22 @@ public partial class SmoothCamera : Camera2D
     [Export] public float ZoomFullSpeed = 480f;
     [Export] public float ZoomSharpness = 2f;
 
+    [ExportGroup("Shake")]
+    [Export] public float MaxShakeOffset = 10f;
+    [Export] public float ShakeDecayRate = 4f;
+
     private Node2D _target;
     private RigidBody2D _targetRb;
     private CharacterBody2D _targetCb;
     private Vector2 _lookaheadOffset;
     private Vector2 _smoothedZoom;
     private Vector2 _lastTargetPos;
+    private Vector2 _smoothPos;
+    private float _trauma;
     private bool _firstFrame = true;
+
+    /// <summary>Add camera trauma (0–1). Stacks up to 1. Shake = trauma².</summary>
+    public void AddTrauma(float amount) => _trauma = Mathf.Min(_trauma + amount, 1f);
 
     public override void _Ready()
     {
@@ -55,6 +64,7 @@ public partial class SmoothCamera : Camera2D
         if (_target != null)
         {
             GlobalPosition = _target.GlobalPosition;
+            _smoothPos = _target.GlobalPosition;
             _lastTargetPos = _target.GlobalPosition;
         }
 
@@ -71,6 +81,7 @@ public partial class SmoothCamera : Camera2D
         // Hard-snap on first frame so there's never a lerp from (0,0)
         if (_firstFrame)
         {
+            _smoothPos = _target.GlobalPosition;
             GlobalPosition = _target.GlobalPosition;
             _lastTargetPos = _target.GlobalPosition;
             _firstFrame = false;
@@ -112,7 +123,20 @@ public partial class SmoothCamera : Camera2D
         // --- Position follow ---
         Vector2 focus = _target.GlobalPosition + _lookaheadOffset;
         float followT = 1f - Mathf.Exp(-FollowSharpness * dt);
-        GlobalPosition = GlobalPosition.Lerp(focus, followT);
+        _smoothPos = _smoothPos.Lerp(focus, followT);
+
+        // --- Shake ---
+        Vector2 shakeOffset = Vector2.Zero;
+        if (_trauma > 0.001f)
+        {
+            float shake = _trauma * _trauma;
+            shakeOffset = new Vector2(
+                GD.Randf() * 2f - 1f,
+                GD.Randf() * 2f - 1f
+            ) * MaxShakeOffset * shake;
+            _trauma = Mathf.MoveToward(_trauma, 0f, ShakeDecayRate * dt);
+        }
+        GlobalPosition = _smoothPos + shakeOffset;
 
         // --- Zoom ---
         if (UseDynamicZoom)

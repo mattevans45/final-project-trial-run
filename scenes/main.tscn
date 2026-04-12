@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://cu38eeqr3fi4"]
+
+[ext_resource type="PackedScene" uid="uid://def11obnilbcr" path="res://scenes/dummy_enemy.tscn" id="2_enemy"]
+[ext_resource type="PackedScene" uid="uid://b751klfkbogf1" path="res://scenes/player_car.tscn" id="5_lquwl"]
+[ext_resource type="Script" uid="uid://rmhf6alg11qw" path="res://scripts/GroundGrid.cs" id="6_ground"]
+[ext_resource type="Script" uid="uid://brrtmv2y6bwfa" path="res://scripts/ArenaLevel.cs" id="7_arena"]
+
+[node name="main" type="Node2D" unique_id=21675825]
+
+[node name="GroundGrid" type="Node2D" parent="." unique_id=112823968]
+z_index = -10
+script = ExtResource("6_ground")
+
+[node name="Background" type="Polygon2D" parent="." unique_id=385155604]
+z_index = -100
+color = Color(0.08, 0.09, 0.12, 1)
+polygon = PackedVector2Array(-6000, -6000, 6000, -6000, 6000, 6000, -6000, 6000)
+
+[node name="ArenaLevel" type="Node2D" parent="." unique_id=1757115488]
+script = ExtResource("7_arena")
+
+[node name="DummyEnemy" parent="." unique_id=1514734667 instance=ExtResource("2_enemy")]
+position = Vector2(200, -300)
+
+[node name="PlayerCar" parent="." unique_id=974707162 instance=ExtResource("5_lquwl")]
+position = Vector2(-800, 0)

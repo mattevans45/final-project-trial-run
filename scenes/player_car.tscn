@@ -1,12 +1,12 @@
-[gd_scene format=3 uid="uid://bpre126ivt727"]
+[gd_scene format=3 uid="uid://b751klfkbogf1"]
 
-[ext_resource type="Script" uid="uid://dgsoycqieik56" path="res://PlayerCar.cs" id="1_in3s4"]
+[ext_resource type="Script" uid="uid://btylv5rupra44" path="res://scripts/PlayerCar.cs" id="1_54ksr"]
 [ext_resource type="Texture2D" uid="uid://b3ijc718wb2gw" path="res://assets/sprite/F1.png" id="2_gty54"]
-[ext_resource type="Shader" uid="uid://dhq4lms5ojccd" path="res://carshader.gdshader" id="3_car"]
-[ext_resource type="Shader" uid="uid://o7yfb4eu3vvo" path="res://glowsprite.gdshader" id="4_glow"]
-[ext_resource type="Shader" uid="uid://odeem75jbu4m" path="res://tire_glow.gdshader" id="5_tireglow"]
-[ext_resource type="Script" uid="uid://ckxtn4pimajqi" path="res://SmoothCamera.cs" id="6_cam"]
-[ext_resource type="Script" uid="uid://kcaxvudgukkf" path="res://TireTrail.cs" id="7_tire"]
+[ext_resource type="Shader" uid="uid://dhq4lms5ojccd" path="res://shaders/carshader.gdshader" id="3_car"]
+[ext_resource type="Shader" uid="uid://o7yfb4eu3vvo" path="res://shaders/glowsprite.gdshader" id="4_glow"]
+[ext_resource type="Shader" uid="uid://odeem75jbu4m" path="res://shaders/tire_glow.gdshader" id="5_tireglow"]
+[ext_resource type="Script" uid="uid://g8xl6w5bnqa7" path="res://scripts/TireTrail.cs" id="5_y4ebs"]
+[ext_resource type="Script" uid="uid://cddy1v0yidjpj" path="res://scripts/SmoothCamera.cs" id="7_0kxao"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_Car"]
 shader = ExtResource("3_car")
@@ -47,7 +47,7 @@ shader_parameter/heat_color = Color(1, 0.3, 0.05, 1)
 shader_parameter/intensity = 0.0
 
 [node name="PlayerCar" type="CharacterBody2D" unique_id=142772476]
-script = ExtResource("1_in3s4")
+script = ExtResource("1_54ksr")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
 texture_filter = 1
@@ -56,7 +56,6 @@ rotation = 1.5707964
 texture = ExtResource("2_gty54")
 
 [node name="GlowSprite" type="Sprite2D" parent="." unique_id=1618215655]
-visible = false
 z_index = -1
 texture_filter = 1
 material = SubResource("ShaderMaterial_Glow")
@@ -69,10 +68,9 @@ shape = SubResource("RectangleShape2D_1")
 
 [node name="TireTrailL" type="Node2D" parent="." unique_id=1538886769]
 position = Vector2(-22, -11)
-script = ExtResource("7_tire")
+script = ExtResource("5_y4ebs")
 
 [node name="DriftSparks" type="GPUParticles2D" parent="TireTrailL" unique_id=1624124609]
-visible = false
 emitting = false
 amount = 32
 lifetime = 0.3
@@ -81,28 +79,31 @@ randomness = 1.0
 process_material = SubResource("ParticleProcessMaterial_Default")
 
 [node name="TireGlow" type="Sprite2D" parent="TireTrailL" unique_id=1203094943]
-visible = false
 material = SubResource("ShaderMaterial_TireGlow")
 scale = Vector2(0.35, 0.35)
 
 [node name="TireTrailR" type="Node2D" parent="." unique_id=109325865]
 position = Vector2(-22, 11)
-script = ExtResource("7_tire")
+script = ExtResource("5_y4ebs")
 
 [node name="DriftSparks" type="GPUParticles2D" parent="TireTrailR" unique_id=192470648]
-visible = false
 emitting = false
 amount = 32
 lifetime = 0.3
 explosiveness = 0.5
 randomness = 1.0
+fixed_fps = 60
 process_material = SubResource("ParticleProcessMaterial_Default")
 
 [node name="TireGlow" type="Sprite2D" parent="TireTrailR" unique_id=1980389189]
-visible = false
 material = SubResource("ShaderMaterial_TireGlow")
-scale = Vector2(0.05, 0.05)
+scale = Vector2(0.35, 0.35)
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=400778302]
-script = ExtResource("6_cam")
+script = ExtResource("7_0kxao")
 TargetPath = NodePath("..")
+UseDynamicZoom = true
+ZoomIdle = 1.4
+ZoomFast = 1.0
+ZoomFullSpeed = 420.0
+ZoomSharpness = 1.8

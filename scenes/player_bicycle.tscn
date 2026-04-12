@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bc1dmdf7nrwx7"]
 
-[ext_resource type="Script" uid="uid://busy0ffuq7dfg" path="res://PlayerBicycle.cs" id="1_pbscr"]
+[ext_resource type="Script" uid="uid://busy0ffuq7dfg" path="res://scripts/PlayerBicycle.cs" id="1_pbscr"]
 [ext_resource type="Texture2D" uid="uid://b3ijc718wb2gw" path="res://assets/sprite/F1.png" id="2_vkalr"]
-[ext_resource type="Script" path="res://SmoothCamera.cs" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/SmoothCamera.cs" id="3_cam"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(56, 28)

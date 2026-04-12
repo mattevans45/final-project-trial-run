@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://deqpi0lmmk6x8"]
+[gd_scene format=3 uid="uid://bml08w6cp5o2s"]
 
-[ext_resource type="Script" uid="uid://b86onb2wda7i" path="res://Vehicle.cs" id="1_fouyv"]
+[ext_resource type="Script" uid="uid://ydmuk3u2me6v" path="res://scripts/Vehicle.cs" id="1_d0fkt"]
 [ext_resource type="Texture2D" uid="uid://brqecuqxmrl2q" path="res://assets/car.png" id="2_yx515"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_0ak5w"]
@@ -66,7 +66,7 @@ animations = [{
 }]
 
 [node name="Vehicle" type="CharacterBody2D" unique_id=1003265522]
-script = ExtResource("1_fouyv")
+script = ExtResource("1_d0fkt")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=671054830]
 shape = SubResource("RectangleShape2D_0ak5w")

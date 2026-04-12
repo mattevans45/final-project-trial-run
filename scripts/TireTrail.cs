@@ -16,7 +16,7 @@ public partial class TireTrail : Node2D
     [Export] public int MaxTrails        = 30;
 
     [ExportGroup("Glow")]
-    [Export] public float GlowOutwardPush = 5f;  // units to push glow toward car edge
+    [Export] public float GlowOutwardPush = 4f;  // units to push glow toward car edge
 
     private PlayerCar _car;
     private Line2D _currentLine;
@@ -61,7 +61,7 @@ public partial class TireTrail : Node2D
         // ── Smoke ─────────────────────────────────────────────────────────────
         _smoke = new GpuParticles2D();
         _smoke.TopLevel = true;
-        _smoke.ZIndex   = 1;
+        _smoke.ZIndex   = -1;
         _ConfigureSmoke(_smoke);
         AddChild(_smoke);
 
@@ -128,25 +128,25 @@ public partial class TireTrail : Node2D
     private void _ConfigureSmoke(GpuParticles2D smoke)
     {
         smoke.Emitting      = false;
-        smoke.Amount        = 32;
-        smoke.Lifetime      = 0.9f;
-        smoke.SpeedScale    = 1.2f;
+        smoke.Amount        = 16;
+        smoke.Lifetime      = 0.75f;
+        smoke.SpeedScale    = 0.4f;   // start low; driven up at runtime via SpeedScale
         smoke.Explosiveness = 0.0f;
 
         var mat = new ParticleProcessMaterial();
         mat.Direction          = new Vector3(0, -1, 0);
-        mat.Spread             = 35f;
-        mat.InitialVelocityMin = 15f;
-        mat.InitialVelocityMax = 40f;
-        mat.AngularVelocityMin = -90f;
-        mat.AngularVelocityMax = 90f;
-        mat.Gravity            = new Vector3(0, -8f, 0);
-        mat.LinearAccelMin     = -10f;
-        mat.LinearAccelMax     = -5f;
-        mat.ScaleMin           = 0.5f;
-        mat.ScaleMax           = 1.4f;
-        mat.DampingMin         = 8f;
-        mat.DampingMax         = 15f;
+        mat.Spread             = 30f;
+        mat.InitialVelocityMin = 12f;
+        mat.InitialVelocityMax = 30f;
+        mat.AngularVelocityMin = -60f;
+        mat.AngularVelocityMax = 60f;
+        mat.Gravity            = new Vector3(0, -6f, 0);
+        mat.LinearAccelMin     = -8f;
+        mat.LinearAccelMax     = -3f;
+        mat.ScaleMin           = 0.25f;   // fixed at birth — not changed at runtime
+        mat.ScaleMax           = 0.55f;
+        mat.DampingMin         = 10f;
+        mat.DampingMax         = 18f;
 
         var colorRamp = new GradientTexture1D();
         var gradient  = new Gradient();
@@ -197,9 +197,13 @@ public partial class TireTrail : Node2D
     {
         if (_car == null) return;
 
-        float dt       = (float)delta;
-        bool shouldMark = _car.IsDrifting && _car.Speed > 30f;
-        float intensity = _car.DriftIntensity;
+        float dt        = (float)delta;
+        float intensity = _car.TireSpinIntensity;
+
+        // Tire marks only appear when the car is actually moving (rubber on road).
+        // Smoke and sparks also fire during a stationary burnout.
+        bool shouldMark  = intensity > 0.08f && _car.Speed > 20f;
+        bool shouldEffect = intensity > 0.08f;
 
         Vector2 wheelWorldPos = _car.ToGlobal(_localOffset);
 
@@ -207,11 +211,9 @@ public partial class TireTrail : Node2D
         if (_sparks != null)
         {
             _sparks.GlobalPosition = wheelWorldPos;
+            _sparks.Emitting = shouldEffect && intensity > 0.12f;
 
-            bool shouldSpark = shouldMark && intensity > 0.15f;
-            _sparks.Emitting = shouldSpark;
-
-            if (shouldSpark && _sparks.ProcessMaterial is ParticleProcessMaterial pmat)
+            if (_sparks.Emitting && _sparks.ProcessMaterial is ParticleProcessMaterial pmat)
             {
                 pmat.InitialVelocityMin = 90f  + 160f * intensity;
                 pmat.InitialVelocityMax = 220f + 260f * intensity;
@@ -222,15 +224,11 @@ public partial class TireTrail : Node2D
         if (_smoke != null)
         {
             _smoke.GlobalPosition = wheelWorldPos;
+            _smoke.Emitting = shouldEffect;
 
-            bool shouldSmoke = shouldMark && intensity > 0.2f;
-            _smoke.Emitting = shouldSmoke;
-
-            if (shouldSmoke && _smoke.ProcessMaterial is ParticleProcessMaterial smat)
-            {
-                smat.InitialVelocityMin = 15f + 25f * intensity;
-                smat.InitialVelocityMax = 40f + 55f * intensity;
-            }
+            // SpeedScale is the only safe runtime knob — it controls spawn rate and
+            // movement speed without touching per-particle attributes on live particles.
+            _smoke.SpeedScale = 0.3f + 1.4f * intensity;
         }
 
         // ── Tire heat glow ────────────────────────────────────────────────────
@@ -250,8 +248,8 @@ public partial class TireTrail : Node2D
         if (_tireGlowMat != null)
         {
             float current = (float)_tireGlowMat.GetShaderParameter("intensity");
-            float target  = shouldMark ? intensity : 0f;
-            float rate     = shouldMark ? 8f : 3f;  // ramp up fast, decay slowly
+            float target  = shouldEffect ? intensity : 0f;
+            float rate    = shouldEffect ? 8f : 3f;  // ramp up fast, decay slowly
             _tireGlowMat.SetShaderParameter("intensity",
                 Mathf.MoveToward(current, target, rate * dt));
         }

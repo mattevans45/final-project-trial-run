@@ -8,7 +8,7 @@ using Godot;
 public partial class PlayerCar : CharacterBody2D
 {
 	[ExportGroup("Engine")]
-	[Export] public float MaxSpeed = 660f;
+	[Export] public float MaxSpeed = 460f;
 	[Export] public float Acceleration = 900f;
 	[Export] public float BrakeForce = 2400f;
 	[Export] public float CoastDrag = 150f;
@@ -22,38 +22,58 @@ public partial class PlayerCar : CharacterBody2D
 
 	[ExportGroup("Steering")]
 	[Export] public float Wheelbase = 150f;
-	[Export] public float MaxSteerAngle = 32f;
+	[Export] public float MaxSteerAngle = 42f;
 	[Export] public float MinSteerSpeed = 80f;
-	[Export] public float HighSpeedSteerReduction = 0.5f;
+	[Export] public float HighSpeedSteerReduction = 0.2f;
 
 	[ExportGroup("Traction")]
-	[Export] public float GripFriction = 12f;
+	[Export] public float GripFriction = 6f;
 	[Export] public float DriftFriction = 3.8f;
 	[Export] public float TireGrip = 0.85f;
 	[Export] public float GripSpeedFalloff = 0.15f;
-	[Export] public float SlipStartThreshold = 140f;
-	[Export] public float SlipEndThreshold = 40f;
-	[Export] public float SteerDriftSpeed = 280f;
-	[Export] public float SteerDriftInput = 0.9f;
+	[Export] public float SlipStartThreshold = 110f;
+	[Export] public float SlipEndThreshold = 35f;
+	[Export] public float SteerDriftSpeed = 180f;
+	[Export] public float SteerDriftInput = 0.62f;
 
 	[ExportGroup("Handbrake")]
 	[Export] public float HandbrakeDrag = 150f;
 	[Export] public float KickImpulse = 0.15f;
-	[Export] public float HandbrakeYawRate = 3.5f;
+	[Export] public float HandbrakeYawRate = 4.2f;
 	[Export] public float HandbrakeFrictionMul = 0.15f;
-	[Export] public float CounterSteerRecovery = 6f;
+	[Export] public float CounterSteerRecovery = 9f;
+
+	[ExportGroup("Boost Start")]
+	/// <summary>How fast the boost charge builds per second at full throttle.</summary>
+	[Export] public float BoostBuildRate   = 1.2f;
+	/// <summary>How fast boost decays when conditions are not met.</summary>
+	[Export] public float BoostDecayRate   = 2.5f;
+	/// <summary>Forward speed given instantly on handbrake release at full charge.</summary>
+	[Export] public float BoostLaunchSpeed = 480f;
+	/// <summary>Car must be slower than this to begin charging a boost.</summary>
+	[Export] public float BoostEntrySpeed  = 80f;
+	/// <summary>Minimum charge required to trigger a launch.</summary>
+	[Export] public float BoostMinCharge   = 0.25f;
 
 	[ExportGroup("Debug")]
 	[Export] public bool ShowDebugVectors = false;
 
 	// ── public read-only state ────────────────────────────────────────────────
-	public bool IsDrifting => _drifting;
-	public bool HandbrakeActive => _handbrakeHeld;
-	public float Speed => Mathf.Abs(_forwardSpeed);
-	public float LateralSpeed => _lateralSpeed;
+	public bool  IsDrifting    => _drifting;
+	public bool  HandbrakeActive => _handbrakeHeld;
+	public float Speed         => Mathf.Abs(_forwardSpeed);
+	public float LateralSpeed  => _lateralSpeed;
 	public float DriftIntensity => Mathf.Clamp(Mathf.Abs(_lateralSpeed) / SlipStartThreshold, 0f, 1f);
-	public float TotalSpeed => Velocity.Length();
-	public bool IsReversing => _forwardSpeed < -5f;
+	public float TotalSpeed    => Velocity.Length();
+	public bool  IsReversing   => _forwardSpeed < -5f;
+	public float BoostCharge   => _boostCharge;
+	public bool  IsBurningOut  => _isBurningOut;
+	/// <summary>
+	/// Combined tire-spin intensity (0–1): max of lateral-slip (drift) and
+	/// longitudinal-spin (burnout). Drives smoke/spark visuals.
+	/// </summary>
+	public float TireSpinIntensity =>
+		Mathf.Max(DriftIntensity, _isBurningOut ? _boostCharge : 0f);
 
 	// ── private state ────────────────────────────────────────────────────────
 	private float _forwardSpeed;
@@ -62,11 +82,15 @@ public partial class PlayerCar : CharacterBody2D
 
 	private ShaderMaterial _mat;
 	private ShaderMaterial _glowMat;
-	private bool _drifting;
+	private SmoothCamera _camera;
+	private float _shakeCooldown;
+	private bool  _drifting;
 	private float _friction;
-	private bool _prevHandbrake;
-	private bool _handbrakeHeld;
-	private bool _wasHandbraking;
+	private bool  _prevHandbrake;
+	private bool  _handbrakeHeld;
+	private bool  _wasHandbraking;
+	private float _boostCharge;
+	private bool  _isBurningOut;
 
 	public override void _Ready()
 	{
@@ -78,15 +102,18 @@ public partial class PlayerCar : CharacterBody2D
 
 		var glowSprite = GetNode<Sprite2D>("GlowSprite");
 		_glowMat = glowSprite.Material as ShaderMaterial;
+		_camera = GetNodeOrNull<SmoothCamera>("Camera2D");
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
 		float dt = (float)delta;
+		if (_shakeCooldown > 0f) _shakeCooldown -= dt;
 		float throttle = Input.GetAxis("drive_reverse", "drive_forward");
 		float steerIn = Input.GetAxis("steer_left", "steer_right");
 		bool handbrake = Input.IsActionPressed("handbrake");
-		bool justPulled = handbrake && !_prevHandbrake;
+		bool justPulled   = handbrake && !_prevHandbrake;
+		bool justReleased = !handbrake && _prevHandbrake;
 		_prevHandbrake = handbrake;
 		_handbrakeHeld = handbrake;
 
@@ -96,7 +123,7 @@ public partial class PlayerCar : CharacterBody2D
 		if (_mat != null)
 		{
 			_mat.SetShaderParameter("speed", TotalSpeed);
-			_mat.SetShaderParameter("drift", DriftIntensity);
+			_mat.SetShaderParameter("drift", TireSpinIntensity);
 		}
 
 		if (_glowMat != null)
@@ -255,6 +282,35 @@ public partial class PlayerCar : CharacterBody2D
 			_lateralSpeed = Mathf.MoveToward(_lateralSpeed, 0f, latDrag * dt);
 		}
 
+		// ── 4b. Boost start ───────────────────────────────────────────────────
+		// Hold handbrake + throttle while near-stationary to spin the rear tires
+		// and charge a launch. Release the handbrake to rocket forward.
+		bool canBurnout = handbrake
+			&& throttle > 0.2f
+			&& Mathf.Abs(_forwardSpeed) < BoostEntrySpeed;
+
+		_isBurningOut = canBurnout;
+
+		if (canBurnout)
+		{
+			// Charge builds proportionally to throttle input
+			_boostCharge = Mathf.Min(1f, _boostCharge + BoostBuildRate * throttle * dt);
+		}
+		else if (justReleased && _boostCharge >= BoostMinCharge)
+		{
+			// LAUNCH: override forward speed with the stored charge
+			float launch = BoostLaunchSpeed * _boostCharge;
+			_forwardSpeed = Mathf.Max(_forwardSpeed, launch);
+			_camera?.AddTrauma(0.35f + _boostCharge * 0.3f);
+			_boostCharge = 0f;
+			_drifting = true;   // wheelspin immediately enters drift state
+		}
+		else
+		{
+			// Bleed charge away when not actively building
+			_boostCharge = Mathf.MoveToward(_boostCharge, 0f, BoostDecayRate * dt);
+		}
+
 		// ── 5. Steering ──────────────────────────────────────────────────────
 		// During forward handbrake, yaw is handled in step 3. Otherwise use
 		// bicycle model. In reverse, steer direction stays intuitive (left = left).
@@ -317,6 +373,14 @@ public partial class PlayerCar : CharacterBody2D
 		{
 			if (!_drifting && handbrake)
 				_wasHandbraking = true;
+
+			// On the first frame of a steer-initiated drift, give a lateral
+			// kick to get the slide going. Without this the grip correction
+			// fights the natural heading-rotation slip and the drift never builds.
+			// Sign: turning right (steerIn > 0) → rear slides left → negative lateral.
+			if (!_drifting && steerDriftEntry && !handbrake)
+				_lateralSpeed -= Mathf.Sign(steerIn) * 40f;
+
 			_drifting = true;
 		}
 		else if (_drifting && absLateral < SlipEndThreshold && !steerDriftEntry)
@@ -362,6 +426,59 @@ public partial class PlayerCar : CharacterBody2D
 		);
 
 		MoveAndSlide();
+
+		// ── 9. Wall impact absorption ─────────────────────────────────────────
+		// MoveAndSlide resolves penetration but leaves the parallel (slide)
+		// component intact. Without this step, _forwardSpeed/_lateralSpeed are
+		// still at their pre-collision values, so the car shoves into the wall
+		// every subsequent frame producing a bounce-slide loop.
+		//
+		// On any collision we:
+		//   a) strip residual into-wall velocity (in case MoveAndSlide missed any)
+		//   b) damp the remaining parallel speed heavily (solid wall feel)
+		//   c) sync internal speed state so the next frame starts correctly
+		int slideHits = GetSlideCollisionCount();
+		if (slideHits > 0)
+		{
+			float worstImpact = 0f;   // largest into-wall speed across all contacts
+
+			for (int i = 0; i < slideHits; i++)
+			{
+				Vector2 n = GetSlideCollision(i).GetNormal();
+				float penetration = Velocity.Dot(n);
+				if (penetration < 0f)
+				{
+					Velocity    -= penetration * n;        // remove into-wall component
+					worstImpact  = Mathf.Max(worstImpact, -penetration);
+				}
+			}
+
+			// Scale damping by how head-on the impact was:
+			//   grazing (low impactFraction) → barely any speed loss
+			//   direct T-bone (high impactFraction) → significant loss
+			float hitSpeed     = Mathf.Max(Velocity.Length(), 1f);
+			float impactFraction = Mathf.Clamp(worstImpact / hitSpeed, 0f, 1f);
+			float damp = Mathf.Lerp(0.85f, 0.40f, impactFraction);
+			Velocity *= damp;
+
+			// Sync internal frame so next tick starts from the reduced velocity.
+			float cosH2 = Mathf.Cos(_heading);
+			float sinH2 = Mathf.Sin(_heading);
+			_forwardSpeed = Velocity.X * cosH2 + Velocity.Y * sinH2;
+			_lateralSpeed = -(Velocity.X * sinH2) + Velocity.Y * cosH2;
+
+			// Only cancel drift/boost on a genuine hard hit
+			if (impactFraction > 0.5f)
+			{
+				if (_shakeCooldown <= 0f)
+				{
+					_camera?.AddTrauma(impactFraction * 0.55f);
+					_shakeCooldown = 0.4f;
+				}
+				_drifting    = false;
+				_boostCharge = 0f;
+			}
+		}
 
 		_heading = Mathf.Wrap(_heading, -Mathf.Pi, Mathf.Pi);
 		GlobalRotation = _heading;
