@@ -3,7 +3,7 @@ shader_type canvas_item;
 uniform vec4 base_tint : source_color = vec4(0.2, 0.8, 1.0, 1.0);
 uniform vec4 accent_tint : source_color = vec4(1.0, 0.1, 0.8, 1.0);
 
-uniform float glow_strength = 2.0;
+uniform float glow_strength = 1.0;
 uniform float edge_width = 1;
 
 uniform float speed = 0.0;
@@ -30,7 +30,7 @@ void fragment() {
     edge = clamp(edge * 5.0, 0.0, 1.0);
 
     // --- COLOR BASE ---
-    float speedFactor = clamp(speed / 600.0, 0.0, 1.0);
+    float speedFactor = clamp(speed / 1000.0, 0.0, 1.0);
     vec3 baseColor = mix(base_tint.rgb, accent_tint.rgb, UV.y);
 
     // Speed-based color shift

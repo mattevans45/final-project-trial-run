@@ -61,6 +61,7 @@ public partial class PlayerCar : CharacterBody2D
 	private float _heading;
 
 	private ShaderMaterial _mat;
+	private ShaderMaterial _glowMat;
 	private bool _drifting;
 	private float _friction;
 	private bool _prevHandbrake;
@@ -74,6 +75,9 @@ public partial class PlayerCar : CharacterBody2D
 		MotionMode = MotionModeEnum.Floating;
 		var sprite = GetNode<Sprite2D>("Sprite2D");
 		_mat = sprite.Material as ShaderMaterial;
+
+		var glowSprite = GetNode<Sprite2D>("GlowSprite");
+		_glowMat = glowSprite.Material as ShaderMaterial;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -94,6 +98,9 @@ public partial class PlayerCar : CharacterBody2D
 			_mat.SetShaderParameter("speed", TotalSpeed);
 			_mat.SetShaderParameter("drift", DriftIntensity);
 		}
+
+		if (_glowMat != null)
+			_glowMat.SetShaderParameter("speed", TotalSpeed);
 
 		// ── 1. Decompose velocity into local frame ────────────────────────────
 		Vector2 vel = Velocity;
