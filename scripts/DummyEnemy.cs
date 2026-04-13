@@ -1,24 +1,66 @@
 using Godot;
 
+/// <summary>
+/// Test enemy that fully delegates health to its child Damageable node.
+///
+/// Set MaxHealth and Armor in the Inspector (or before AddChild when spawning
+/// programmatically) to differentiate difficulty tiers without needing separate
+/// scene files.
+///
+/// Groups: automatically adds itself to both "enemies" (used by RamSystem) and
+/// "Enemies" (used by BumperArea) so either damage path works.
+/// </summary>
 public partial class DummyEnemy : StaticBody2D
 {
-    [Export] public int Health = 100;
+    [ExportGroup("Stats")]
+    [Export] public float MaxHealth  = 100f;
+    [Export] public float Armor      = 0f;
+    [Export] public int   ScoreValue = 100;
 
-    public void TakeDamage(int amount)
+    private Damageable _damageable;
+
+    public override void _Ready()
     {
-        Health -= amount;
-        GD.Print($"Enemy took {amount} damage! Health left: {Health}");
+        // Unify group names — RamSystem uses "enemies", BumperArea uses "Enemies"
+        AddToGroup("enemies");
+        AddToGroup("Enemies");
 
-        // Quick visual feedback: Flash white, then back to normal
-        Modulate = Colors.White;
-        
-        // A quick lambda timer to reset the color after 0.1 seconds
-        GetTree().CreateTimer(0.1f).Timeout += () => Modulate = new Color(1, 1, 1, 1); // Reset
+        // All arena obstacles use CollisionLayer=2 so the player can detect them.
+        // The scene default is layer 1, which the player's mask doesn't include.
+        CollisionLayer = 2;
+        CollisionMask  = 0;   // static enemies don't need to detect others
 
-        if (Health <= 0)
+        _damageable = GetNodeOrNull<Damageable>("Damageable");
+        if (_damageable == null)
         {
-            GD.Print("Enemy Destroyed!");
-            QueueFree(); // Removes the enemy from the game
+            GD.PushError($"DummyEnemy '{Name}': missing Damageable child node.");
+            return;
         }
+
+        // Push exported stats into the component before resetting
+        _damageable.MaxHealth = MaxHealth;
+        _damageable.Armor     = Armor;
+        _damageable.Reset();
+
+        _damageable.Died += _OnDied;
+
+        // Attach the floating health bar
+        var bar = new EnemyHealthBar();
+        AddChild(bar);
+    }
+
+    // ── Death sequence ────────────────────────────────────────────────────────
+
+    private void _OnDied()
+    {
+        // Stop taking hits immediately
+        RemoveFromGroup("enemies");
+        RemoveFromGroup("Enemies");
+
+        // Brief white flash
+        Modulate = Colors.White;
+
+        // Short delay so the flash is visible, then remove from scene
+        GetTree().CreateTimer(0.10).Timeout += QueueFree;
     }
 }

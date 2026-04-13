@@ -12,6 +12,9 @@ public partial class Damageable : Node
 {
     [Export] public float MaxHealth = 100f;
     [Export] public float CurrentHealth { get; private set; }
+    /// <summary>Flat damage reduction applied to every hit (minimum 1 damage
+    /// always gets through).  Set from VehicleData.Armor or enemy exports.</summary>
+    [Export] public float Armor = 0f;
     /// <summary>Seconds of invincibility after taking damage. Prevents
     /// multi-hit from a single collision frame.</summary>
     [Export] public float IFrameDuration = 0.15f;
@@ -46,7 +49,9 @@ public partial class Damageable : Node
         if (!IsAlive || amount <= 0f) return 0f;
         if (_iFrameTimer > 0f) return 0f;
 
-        float actual = Mathf.Min(amount, CurrentHealth);
+        // Armor subtracts from raw damage, but at least 1 always gets through
+        float mitigated = Mathf.Max(1f, amount - Armor);
+        float actual = Mathf.Min(mitigated, CurrentHealth);
         CurrentHealth -= actual;
         _iFrameTimer = IFrameDuration;
 

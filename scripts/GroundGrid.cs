@@ -6,18 +6,26 @@ public partial class GroundGrid : Node2D
 
     private static readonly Vector2 ArenaHalfSize = new(1200f, 900f);
 
+    // ── Trail-map resolution ───────────────────────────────────────────────────
+    // The full arena is 2400×1800. Running SubViewports at full resolution costs
+    // ~33 MB VRAM and ~518 M pixels/s GPU fill @ 60 fps.
+    // 512×384 (same 4:3 aspect) reduces that to ~1.5 MB and ~24 M pixels/s —
+    // a ~22× improvement with no perceptible quality loss at typical game zoom.
+    private const int   TrailMapWidth  = 512;
+    private const int   TrailMapHeight = 384;
+    // Uniform scale factor: viewport pixels per arena pixel
+    private float _vpScale;
+
     private ShaderMaterial _mat;
     private Node2D         _car;
+    private Camera2D       _camera;      // cached — GetCamera2D() traverses a list each call
     private float          _currentBrakeLight;
     private float          _time;
 
     private FastNoiseLite _puddleNoise;
 
-    // Trail splat map nodes (Temporary Wake)
     private SubViewport _trailViewport;
     private Sprite2D    _trailBrush;
-
-    // Depletion map nodes (Permanent Dryness)
     private SubViewport _depletionViewport;
     private Sprite2D    _depletionBrush;
 
@@ -31,11 +39,17 @@ public partial class GroundGrid : Node2D
 
         if (_mat == null) return;
 
+        // _vpScale = viewport pixels per arena pixel (uniform — aspect ratios match)
+        _vpScale = TrailMapWidth / (ArenaHalfSize.X * 2f);
+
         _mat.SetShaderParameter("puddle_noise_tex",  _BakeSimplex(512));
         _mat.SetShaderParameter("asphalt_noise_tex", _BakeCellular(512));
         _mat.SetShaderParameter("arena_half_size",   ArenaHalfSize);
 
         _SetupViewports();
+
+        // Cache camera — avoids a list traversal every _Process frame
+        _camera = GetViewport().GetCamera2D() as Camera2D;
     }
 
     private ImageTexture _BakeSimplex(int size)
@@ -44,7 +58,7 @@ public partial class GroundGrid : Node2D
         {
             NoiseType      = FastNoiseLite.NoiseTypeEnum.SimplexSmooth,
             Frequency      = 0.004f,
-            FractalType    = FastNoiseLite.FractalTypeEnum.Fbm, 
+            FractalType    = FastNoiseLite.FractalTypeEnum.Fbm,
             FractalOctaves = 4,
         };
         return _NoiseToTexture(_puddleNoise, size);
@@ -85,13 +99,10 @@ public partial class GroundGrid : Node2D
 
     private void _SetupViewports()
     {
-        int w = (int)(ArenaHalfSize.X * 2);   
-        int h = (int)(ArenaHalfSize.Y * 2);   
-
-        // 1. Temporary Wake Map
+        // ── 1. Temporary Wake Map ─────────────────────────────────────────────
         _trailViewport = new SubViewport
         {
-            Size                   = new Vector2I(w, h),
+            Size                   = new Vector2I(TrailMapWidth, TrailMapHeight),
             RenderTargetClearMode  = SubViewport.ClearMode.Never,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
             TransparentBg          = false,
@@ -101,40 +112,43 @@ public partial class GroundGrid : Node2D
         var root = new Node2D();
         _trailViewport.AddChild(root);
 
-        var fade = new ColorRect
+        // Full-viewport fade rect — sized to the viewport, not the arena
+        root.AddChild(new ColorRect
         {
             Color    = new Color(0f, 0f, 0f, 0.006f),
-            Size     = new Vector2(w, h),
+            Size     = new Vector2(TrailMapWidth, TrailMapHeight),
             Position = Vector2.Zero,
-        };
-        root.AddChild(fade);
+        });
 
         _trailBrush = new Sprite2D
         {
             Texture  = _CreateBrushTexture(96),
-            Position = ArenaHalfSize,      
+            Position = ArenaHalfSize * _vpScale,   // center of the scaled viewport
         };
         root.AddChild(_trailBrush);
 
-        // 2. Permanent Depletion Map
+        // ── 2. Permanent Depletion Map ────────────────────────────────────────
         _depletionViewport = new SubViewport
         {
-            Size                   = new Vector2I(w, h),
+            Size                   = new Vector2I(TrailMapWidth, TrailMapHeight),
             RenderTargetClearMode  = SubViewport.ClearMode.Never,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
-            TransparentBg          = true, // Start completely transparent
+            TransparentBg          = true,
         };
         AddChild(_depletionViewport);
 
         _depletionBrush = new Sprite2D
         {
-            Texture  = _CreateBrushTexture(64), // Slightly smaller
-            Position = ArenaHalfSize,
+            Texture  = _CreateBrushTexture(64),
+            Position = ArenaHalfSize * _vpScale,
         };
         _depletionViewport.AddChild(_depletionBrush);
 
-        // Pass to shader
-        _mat.SetShaderParameter("trail_map", _trailViewport.GetTexture());
+        // Pass texture references to shader ONCE here.
+        // SubViewportTextures are live objects — their contents update automatically
+        // every frame when UpdateMode = Always, so there is no need to re-call
+        // SetShaderParameter("trail_map"/"depletion_map") in _Process.
+        _mat.SetShaderParameter("trail_map",    _trailViewport.GetTexture());
         _mat.SetShaderParameter("depletion_map", _depletionViewport.GetTexture());
     }
 
@@ -147,7 +161,7 @@ public partial class GroundGrid : Node2D
         {
             float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
             float t = 1f - Mathf.Clamp(d / c, 0f, 1f);
-            t = t * t;                                  
+            t = t * t;
             img.SetPixel(x, y, new Color(1, 1, 1, t));
         }
         return ImageTexture.CreateFromImage(img);
@@ -166,13 +180,16 @@ public partial class GroundGrid : Node2D
         if (_mat == null) return;
 
         float dt = (float)delta;
-        _time += dt;
+
+        // Wrap _time to prevent float precision loss after long sessions.
+        // At 60 fps it would take ~38 days to overflow; wrapping at 1000 s
+        // is imperceptible since the shader only uses it for slow animation.
+        _time = (_time + dt) % 1000f;
         _mat.SetShaderParameter("game_time", _time);
 
-        if (_trailViewport != null)
-            _mat.SetShaderParameter("trail_map", _trailViewport.GetTexture());
-        if (_depletionViewport != null)
-            _mat.SetShaderParameter("depletion_map", _depletionViewport.GetTexture());
+        // trail_map and depletion_map are NOT re-sent here.
+        // SubViewportTexture is a live reference — its contents update automatically
+        // each frame; sending the same pointer again is pure overhead.
 
         if (!GodotObject.IsInstanceValid(_car))
             _FindPlayer();
@@ -181,8 +198,9 @@ public partial class GroundGrid : Node2D
 
         if (GodotObject.IsInstanceValid(_trailBrush))
         {
-            Vector2 targetPos = _car.GlobalPosition + ArenaHalfSize;
-            _trailBrush.Position = targetPos;
+            // Convert world position to viewport pixel coordinates
+            Vector2 targetPos = (_car.GlobalPosition + ArenaHalfSize) * _vpScale;
+            _trailBrush.Position    = targetPos;
             _depletionBrush.Position = targetPos;
 
             float speed = 0f;
@@ -197,12 +215,18 @@ public partial class GroundGrid : Node2D
                 speed = cb.Velocity.Length();
             }
 
-            _trailBrush.Scale    = Vector2.One * Mathf.Lerp(0.7f, 1.6f, drift);
-            _trailBrush.Modulate = new Color(1f, 1f, 1f, Mathf.Clamp(speed / 40f + 0.15f, 0f, 1f));
+            float speedScale      = Mathf.Clamp(speed / 300f, 0.25f, 0.85f);
+            float driftMultiplier = Mathf.Lerp(1.0f, 1.6f, drift);
+            // Scale by _vpScale so the brush covers the same arena area regardless
+            // of viewport resolution
+            float targetScale     = speedScale * driftMultiplier * _vpScale;
 
-            // Depletion brush paints very slowly to simulate gradual drying
-            _depletionBrush.Scale = Vector2.One * Mathf.Lerp(0.5f, 1.2f, drift);
-            _depletionBrush.Modulate = new Color(1f, 1f, 1f, 0.05f);
+            _trailBrush.Scale    = Vector2.One * targetScale;
+            _depletionBrush.Scale = Vector2.One * targetScale;
+
+            float violence = Mathf.Clamp(speed / 150f, 0.1f, 1.0f);
+            _trailBrush.Modulate    = new Color(1f, 1f, 1f, violence);
+            _depletionBrush.Modulate = new Color(1f, 1f, 1f, violence * 0.05f);
         }
 
         var carScript = _car as PlayerCar;
@@ -212,9 +236,12 @@ public partial class GroundGrid : Node2D
         _currentBrakeLight = Mathf.Lerp(_currentBrakeLight, targetBrake, 15f * dt);
         _mat.SetShaderParameter("brake_strength", _currentBrakeLight);
 
-        var cam = GetViewport().GetCamera2D();
-        if (cam != null)
-            _mat.SetShaderParameter("screen_center", cam.GlobalPosition);
+        // Use cached camera reference — GetCamera2D() traverses a list every call
+        if (_camera == null || !GodotObject.IsInstanceValid(_camera))
+            _camera = GetViewport().GetCamera2D() as Camera2D;
+
+        if (_camera != null)
+            _mat.SetShaderParameter("screen_center", _camera.GlobalPosition);
     }
 
     public float GetOilIntensity(Vector2 worldPos)
@@ -223,7 +250,7 @@ public partial class GroundGrid : Node2D
             Mathf.Floor(worldPos.X * 0.00115f + 77.3f),
             Mathf.Floor(worldPos.Y * 0.00115f + 91.1f));
         float cellHash = _Hash21(cell);
-        if (cellHash < 0.82f) return 0f;          
+        if (cellHash < 0.82f) return 0f;
 
         float oilN = _puddleNoise != null
             ? _puddleNoise.GetNoise2D(worldPos.X * 0.9216f + 281.6f,

@@ -22,13 +22,57 @@ public partial class ArenaLevel : Node2D
     static readonly Color CHazardY = new(0.82f, 0.72f, 0.12f, 0.80f);
     static readonly Color CHazardB = new(0.12f, 0.12f, 0.10f, 0.80f);
 
+    // Enemy spawn definitions: (position, maxHealth, armor, tint, name)
+    private static readonly (Vector2 pos, float hp, float armor, Color tint, string label)[] EnemyDefs =
+    {
+        // ── Standard scouts — low HP, no armor, flanking positions ──────────
+        (new Vector2(-500f,  -350f), 80f,  0f,  new Color(0.85f, 0.85f, 0.85f), "Scout_NW"),
+        (new Vector2( 500f,  -350f), 80f,  0f,  new Color(0.85f, 0.85f, 0.85f), "Scout_NE"),
+
+        // ── Heavy bruisers — high HP, no armor, roaming mid-field ───────────
+        (new Vector2(-600f,   200f), 250f, 0f,  new Color(0.80f, 0.28f, 0.22f), "Heavy_W"),
+        (new Vector2( 600f,   200f), 250f, 0f,  new Color(0.80f, 0.28f, 0.22f), "Heavy_E"),
+
+        // ── Armored sentinels — medium HP, high armor, choke points ─────────
+        (new Vector2(   0f,  -550f), 150f, 20f, new Color(0.28f, 0.45f, 0.72f), "Sentinel_N"),
+        (new Vector2(   0f,   550f), 150f, 20f, new Color(0.28f, 0.45f, 0.72f), "Sentinel_S"),
+
+        // ── Elite veterans — high HP, moderate armor, near walls ─────────────
+        (new Vector2(-750f,    50f), 320f, 12f, new Color(0.55f, 0.30f, 0.70f), "Elite_W"),
+        (new Vector2( 750f,    50f), 320f, 12f, new Color(0.55f, 0.30f, 0.70f), "Elite_E"),
+    };
+
     public override void _Ready()
     {
         _BuildWalls();
         _BuildContainers();
-        _BuildDebris();
         _BuildGroundMarkings();
         _BuildGlobalLight();
+        _SpawnTestEnemies();
+    }
+
+    // ── Enemy spawning ────────────────────────────────────────────────────────
+
+    private void _SpawnTestEnemies()
+    {
+        var scene = ResourceLoader.Load<PackedScene>("res://scenes/dummy_enemy.tscn");
+        if (scene == null)
+        {
+            GD.PushWarning("ArenaLevel: could not load dummy_enemy.tscn");
+            return;
+        }
+
+        foreach (var (pos, hp, armor, tint, label) in EnemyDefs)
+        {
+            var enemy = scene.Instantiate<DummyEnemy>();
+            // Set stats BEFORE AddChild so _Ready reads the correct values
+            enemy.MaxHealth  = hp;
+            enemy.Armor      = armor;
+            enemy.Name       = label;
+            AddChild(enemy);
+            enemy.GlobalPosition = pos;
+            enemy.Modulate       = tint;
+        }
     }
 
     // ── Walls with properly-sized hazard stripes ─────────────────────────────
@@ -44,12 +88,16 @@ public partial class ArenaLevel : Node2D
         _MakeWall(new Vector2(-hw - wt * 0.5f, 0),  new Vector2(wt, ArenaHeight));
         _MakeWall(new Vector2( hw + wt * 0.5f, 0),  new Vector2(wt, ArenaHeight));
 
-        // Hazard stripes: narrow band along inner face
+        // Hazard stripes — all four wall faces rendered as one StripeDrawer node
+        // instead of ~344 individual Polygon2D nodes (one per dash).
         float sh = 6f;
-        _AddHazardStripe(new Vector2(0,            -hh + sh * 0.5f), ArenaWidth, true);
-        _AddHazardStripe(new Vector2(0,             hh - sh * 0.5f), ArenaWidth, true);
-        _AddHazardStripe(new Vector2(-hw + sh * 0.5f, 0),            ArenaHeight, false);
-        _AddHazardStripe(new Vector2( hw - sh * 0.5f, 0),            ArenaHeight, false);
+        var stripes = new StripeDrawer { ZIndex = 2 };
+        AddChild(stripes);
+        stripes.AddStripe(new Vector2(0,            -hh + sh * 0.5f), ArenaWidth,  horizontal: true);
+        stripes.AddStripe(new Vector2(0,             hh - sh * 0.5f), ArenaWidth,  horizontal: true);
+        stripes.AddStripe(new Vector2(-hw + sh * 0.5f, 0),            ArenaHeight, horizontal: false);
+        stripes.AddStripe(new Vector2( hw - sh * 0.5f, 0),            ArenaHeight, horizontal: false);
+        stripes.Commit(CHazardY);
     }
 
     private void _MakeWall(Vector2 pos, Vector2 size)
@@ -68,33 +116,6 @@ public partial class ArenaLevel : Node2D
         float bevelH = Mathf.Min(4f, size.Y * 0.1f);
         body.AddChild(_Rect(new Vector2(size.X, bevelH), CWallDk,
             new Vector2(0, (size.Y - bevelH) * 0.5f)));
-    }
-
-    private void _AddHazardStripe(Vector2 pos, float length, bool horizontal)
-    {
-        // Narrow alternating yellow/black dashes — NOT rotated diagonal stripes
-        float stripeH = 6f;
-        float dashLen = 14f;
-        float gapLen = 14f;
-        int count = (int)(length / (dashLen + gapLen)) + 1;
-        float totalLen = count * (dashLen + gapLen);
-        float start = -totalLen * 0.5f;
-
-        for (int i = 0; i < count; i++)
-        {
-            float offset = start + i * (dashLen + gapLen);
-
-            // Yellow dash
-            var dash = _Rect(
-                horizontal ? new Vector2(dashLen, stripeH) : new Vector2(stripeH, dashLen),
-                CHazardY
-            );
-            dash.Position = pos + (horizontal
-                ? new Vector2(offset + dashLen * 0.5f, 0)
-                : new Vector2(0, offset + dashLen * 0.5f));
-            dash.ZIndex = 2;
-            AddChild(dash);
-        }
     }
 
     // ── Containers ───────────────────────────────────────────────────────────
@@ -218,51 +239,6 @@ public partial class ArenaLevel : Node2D
         }
     }
 
-    // ── Small debris ─────────────────────────────────────────────────────────
-    private void _BuildDebris()
-    {
-        // Small square obstacles — bollards, crates, barrels
-        var debris = new (float x, float y, float s, Color c)[]
-        {
-            (-620, -615, 12, CRust),
-            ( 620, -580, 12, COrange),
-            (-900, -100, 10, CYellow),
-            (-900,  300, 12, CRed),
-            (-680, -230, 10, CYellow),
-            (-680,  170, 10, CYellow),
-            (-200, -400, 14, CRust),
-            ( 300,  400, 12, CWall),
-            ( 450, -150, 10, COrange),
-            ( 150,  550, 12, CRed),
-            ( 800,  400, 12, CRust),
-        };
-
-        foreach (var (x, y, s, col) in debris)
-        {
-            var body = new StaticBody2D { Position = new Vector2(x, y), ZIndex = 1 };
-            body.CollisionLayer = 2;
-            body.CollisionMask = 1 | 4;
-            AddChild(body);
-
-            body.AddChild(new CollisionShape2D {
-                Shape = new CircleShape2D { Radius = s * 0.5f }
-            });
-            // Debris is too small (10–14 px) to produce useful light shadows;
-            // adding an occluder here would only risk trapping the headlight
-            // source inside the polygon when the car drives close.
-
-            // Simple visual: small dark square with lighter top
-            body.AddChild(_Rect(new Vector2(s, s), col.Darkened(0.15f)));
-            body.AddChild(_Rect(new Vector2(s * 0.7f, s * 0.4f),
-                col.Lightened(0.08f), new Vector2(0, -s * 0.12f)));
-
-            // Tiny shadow
-            var sh = _Rect(new Vector2(s + 2, s + 2), new Color(0, 0, 0, 0.2f), new Vector2(1, 2));
-            sh.ZIndex = -1;
-            body.AddChild(sh);
-        }
-    }
-
     // ── Ground markings ──────────────────────────────────────────────────────
     private void _BuildGroundMarkings()
     {
@@ -304,12 +280,9 @@ public partial class ArenaLevel : Node2D
     }
 
     /// <summary>
-    /// Creates a LightOccluder2D whose polygon matches the given rectangle size,
-    /// so PointLight2D shadows are blocked by this object.
-    /// </summary>
-    /// <summary>
-    /// Creates a LightOccluder2D whose polygon is slightly smaller than the 
-    /// collision size to prevent PointLight2D nodes from clipping inside and inverting shadows.
+    /// Creates a LightOccluder2D whose polygon is slightly smaller than the
+    /// collision size to prevent PointLight2D nodes from clipping inside and
+    /// inverting shadows.
     /// </summary>
     private static LightOccluder2D _MakeOccluder(Vector2 size)
     {

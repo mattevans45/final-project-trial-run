@@ -4,5 +4,12 @@
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>FinalProjectTrialRun</RootNamespace>
+    <!-- Emit the XML doc file so Godot can display /// <summary> tooltips
+         in the Inspector for all [Export] properties. Without this the
+         compiler discards doc comments entirely and the editor shows nothing. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Suppress the "missing XML comment" warning (CS1591) so you aren't
+         forced to document every private helper to get a clean build. -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 </Project>
