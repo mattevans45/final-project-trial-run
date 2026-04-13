@@ -286,7 +286,7 @@ public partial class GroundGrid : Node2D
                                             worldPos.Y * 0.8704f + 358.4f) * 0.5f + 0.5f;
         float n2 = _puddleNoise.GetNoise2D(worldPos.X * 2.1504f + 358.4f,
                                             worldPos.Y * 2.1504f + 102.4f) * 0.5f + 0.5f;
-        return Mathf.SmoothStep(0.58f, 0.76f, n1 * 0.65f + n2 * 0.35f);
+        return Mathf.SmoothStep(0.65f, 0.80f, n1 * 0.65f + n2 * 0.35f);
     }
 
     // ── Hash helpers ─────────────────────────────────────────────────────────

@@ -94,11 +94,10 @@ void fragment() {
     float p_n2  = texture(puddle_noise_tex, pos * 0.00420 + vec2(0.70, 0.20) + p_warp * 0.14).r;
     float p_v   = p_n1 * 0.65 + p_n2 * 0.35;
 
-    // Raise the lower threshold to ~0.58 so only the top ~20 % of noise values
-    // become puddles — fewer, smaller pools instead of a swamped arena.
-    float base_puddle = smoothstep(0.58, 0.76, p_v) * wetness;
-    float puddle_edge = smoothstep(0.54, 0.58, p_v)
-                      * (1.0 - smoothstep(0.58, 0.67, p_v)) * wetness;
+    // Top ~22 % of noise values become puddles — scattered pools, not a swamp.
+    float base_puddle = smoothstep(0.65, 0.80, p_v) * wetness;
+    float puddle_edge = smoothstep(0.61, 0.65, p_v)
+                      * (1.0 - smoothstep(0.65, 0.72, p_v)) * wetness;
 
     // ── 3. Trail splat map — replaces the rigid wake cone ─────────────────────
     // Convert world position to trail texture UV (arena spans ±arena_half_size)
@@ -118,8 +117,8 @@ void fragment() {
     vec3  reflect_col  = mix(col.rgb, water_col, 0.72) * 0.88;
     col.rgb = mix(col.rgb, reflect_col, reflectivity);
 
-    // Perimeter catch-light: bright aqua rim at the water's edge
-    col.rgb = mix(col.rgb, vec3(0.25, 0.55, 0.88), puddle_edge * 0.70);
+    // Perimeter catch-light: subtle aqua rim at the water's edge
+    col.rgb = mix(col.rgb, vec3(0.22, 0.48, 0.78), puddle_edge * 0.45);
 
     // ── 5. Trail effects — visible on ALL surface types ───────────────────────
     // Dry tire tracks: slight darkening wherever the car drove.

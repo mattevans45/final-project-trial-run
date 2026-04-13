@@ -9,7 +9,9 @@ void fragment() {
 
     float speedBoost = clamp(speed / 600.0, 0.0, 1.0);
 
-    vec3 emission = glow_color.rgb * (intensity + speedBoost * 2.0);
+    // Cap the speed multiplier so at full speed the glow intensifies subtly
+    // without washing out the entire screen white.
+    vec3 emission = glow_color.rgb * (intensity + speedBoost * 0.55);
 
-    COLOR = vec4(emission, tex.a * 0.2);
+    COLOR = vec4(emission, tex.a * 0.18);
 }
