@@ -132,49 +132,54 @@ script = ExtResource("9_ha3po")
 [node name="HitFlash" type="Node" parent="." unique_id=1515865463]
 script = ExtResource("10_e73mi")
 
-[node name="Headlightl" type="PointLight2D" parent="." unique_id=1060348402]
+[node name="HeadlightLOLD" type="PointLight2D" parent="." unique_id=391176655]
 visible = false
 texture_filter = 1
-position = Vector2(259, -8)
-rotation = -3.1415925
-energy = 5.0
-shadow_enabled = true
-shadow_filter = 1
-shadow_filter_smooth = 3.0
-texture = ExtResource("12_e73mi")
-height = 400.0
-
-[node name="HeadlightLOLD" type="PointLight2D" parent="." unique_id=391176655]
-texture_filter = 1
-position = Vector2(263, -9)
+position = Vector2(266, -10)
 rotation = -3.1415925
 color = Color(0.3491902, 0.6651851, 0.95468724, 1)
 energy = 5.0
 shadow_enabled = true
 shadow_filter = 1
-shadow_filter_smooth = 20.0
+shadow_filter_smooth = 3.0
 texture = ExtResource("11_ha3po")
+height = 400.0
 
-[node name="HeadlightR" type="PointLight2D" parent="." unique_id=1505253995]
-visible = false
+[node name="HeadlightL" type="PointLight2D" parent="." unique_id=515566090]
 texture_filter = 1
-position = Vector2(258, 8)
-rotation = 3.1415927
-color = Color(0.3818348, 0.3818348, 0.3818348, 1)
-energy = 10.0
+position = Vector2(28, -8)
+rotation = -3.14159
+color = Color(0.09935913, 0.29683796, 0.55938184, 1)
+energy = 5.0
 shadow_enabled = true
 shadow_filter = 1
 shadow_filter_smooth = 3.0
 texture = ExtResource("12_e73mi")
+offset = Vector2(-230, 0)
+height = 400.0
+
+[node name="HeadlightR" type="PointLight2D" parent="." unique_id=953890964]
+texture_filter = 1
+position = Vector2(28, 8)
+rotation = 3.14159
+color = Color(0.09935913, 0.29683796, 0.55938184, 1)
+energy = 5.0
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 3.0
+texture = ExtResource("12_e73mi")
+offset = Vector2(-230, 0)
 height = 400.0
 
 [node name="HeadlightROLD" type="PointLight2D" parent="." unique_id=1861123056]
+visible = false
 texture_filter = 1
-position = Vector2(264, 10)
+position = Vector2(265, 10)
 rotation = 3.1415927
 color = Color(0.3491902, 0.6651851, 0.95468724, 1)
 energy = 5.0
 shadow_enabled = true
 shadow_filter = 1
-shadow_filter_smooth = 20.0
+shadow_filter_smooth = 3.0
 texture = ExtResource("11_ha3po")
+height = 400.0
