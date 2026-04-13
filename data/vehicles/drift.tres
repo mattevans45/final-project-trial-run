@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3 uid="uid://cfcw7o15npb28"]
+
+[ext_resource type="Texture2D" uid="uid://cq1ogx0ofnens" path="res://assets/sprite/370z.png" id="1_s5wf4"]
+[ext_resource type="Script" uid="uid://vkk4rndyht2g" path="res://scripts/VehicleData.cs" id="2_m21we"]
+
+[resource]
+script = ExtResource("2_m21we")
+DisplayName = "Drift King"
+Description = "Slidy
+"
+SpriteTexture = ExtResource("1_s5wf4")
+BaseTint = Color(0.9607843, 0.8, 1, 1)
+AccentTint = Color(0.3491902, 1, 0.735357, 1)
+GlowColor = Color(0.79595864, 0, 1, 1)
+MaxSpeed = 440.0
+Acceleration = 800.0
+DriftThrottleBlend = 0.9
+MaxSteerAngle = 45.0
+GripFriction = 4.5
+DriftFriction = 2.5
+TireGrip = 0.75
+SlipStartThreshold = 80.0
+SlipEndThreshold = 25.0
+HandbrakeYawRate = 5.5
+KickImpulse = 0.22
+HandbrakeFrictionMul = 0.08
+CounterSteerRecovery = 14.0
+MaxHealth = 80.0
+RamDamage = 20.0
+CollisionSize = Vector2(54, 26)
+metadata/_custom_type_script = "uid://vkk4rndyht2g"

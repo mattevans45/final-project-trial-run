@@ -26,8 +26,8 @@ public partial class SmoothCamera : Camera2D
 
     [ExportGroup("Zoom")]
     [Export] public bool UseDynamicZoom = false;
-    [Export] public float ZoomIdle = 1.5f;
-    [Export] public float ZoomFast = 1.2f;
+    [Export] public float ZoomIdle = 2.0f;
+    [Export] public float ZoomFast = 1.5f;
     [Export] public float ZoomFullSpeed = 480f;
     [Export] public float ZoomSharpness = 2f;
 

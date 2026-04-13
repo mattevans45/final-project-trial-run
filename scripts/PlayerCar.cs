@@ -3,21 +3,17 @@ using Godot;
 /// <summary>
 /// Arcade-physics car on CharacterBody2D.
 /// Forza-style: snappy grip, momentum-preserving handbrake drift, counter-steer recovery.
-/// Proper reverse handling: capped speed, intuitive steering, no handbrake drift.
 /// </summary>
 public partial class PlayerCar : CharacterBody2D
+
 {
+
 	[ExportGroup("Engine")]
 	[Export] public float MaxSpeed = 460f;
 	[Export] public float Acceleration = 900f;
 	[Export] public float BrakeForce = 2400f;
 	[Export] public float CoastDrag = 150f;
-	/// <summary>Quadratic drag coefficient. Drag = AeroDrag * speed².
-	/// Creates natural speed falloff at high speed and a soft top speed feel.</summary>
 	[Export] public float AeroDrag = 0.8f;
-	/// <summary>While drifting, throttle accelerates along the velocity direction
-	/// instead of the car's heading. This fraction (0–1) controls the blend:
-	/// 0 = always heading-aligned, 1 = fully velocity-aligned during drift.</summary>
 	[Export] public float DriftThrottleBlend = 0.75f;
 
 	[ExportGroup("Steering")]
@@ -44,34 +40,30 @@ public partial class PlayerCar : CharacterBody2D
 	[Export] public float CounterSteerRecovery = 9f;
 
 	[ExportGroup("Boost Start")]
-	/// <summary>How fast the boost charge builds per second at full throttle.</summary>
-	[Export] public float BoostBuildRate   = 1.2f;
-	/// <summary>How fast boost decays when conditions are not met.</summary>
-	[Export] public float BoostDecayRate   = 2.5f;
-	/// <summary>Forward speed given instantly on handbrake release at full charge.</summary>
+	[Export] public float BoostBuildRate = 1.2f;
+	[Export] public float BoostDecayRate = 2.5f;
 	[Export] public float BoostLaunchSpeed = 480f;
-	/// <summary>Car must be slower than this to begin charging a boost.</summary>
-	[Export] public float BoostEntrySpeed  = 80f;
-	/// <summary>Minimum charge required to trigger a launch.</summary>
-	[Export] public float BoostMinCharge   = 0.25f;
+	[Export] public float BoostEntrySpeed = 80f;
+	[Export] public float BoostMinCharge = 0.25f;
 
 	[ExportGroup("Debug")]
 	[Export] public bool ShowDebugVectors = false;
 
+	// ── Signals (decoupled feedback) ──────────────────────────────────────────
+	[Signal] public delegate void ImpactEventHandler(float intensity);
+
 	// ── public read-only state ────────────────────────────────────────────────
-	public bool  IsDrifting    => _drifting;
-	public bool  HandbrakeActive => _handbrakeHeld;
-	public float Speed         => Mathf.Abs(_forwardSpeed);
-	public float LateralSpeed  => _lateralSpeed;
+	public Vector2 ForwardDir => GlobalTransform.X;
+    public bool IsBraking { get; private set; }
+	public bool IsDrifting => _drifting;
+	public bool HandbrakeActive => _handbrakeHeld;
+	public float Speed => Mathf.Abs(_forwardSpeed);
+	public float LateralSpeed => _lateralSpeed;
 	public float DriftIntensity => Mathf.Clamp(Mathf.Abs(_lateralSpeed) / SlipStartThreshold, 0f, 1f);
-	public float TotalSpeed    => Velocity.Length();
-	public bool  IsReversing   => _forwardSpeed < -5f;
-	public float BoostCharge   => _boostCharge;
-	public bool  IsBurningOut  => _isBurningOut;
-	/// <summary>
-	/// Combined tire-spin intensity (0–1): max of lateral-slip (drift) and
-	/// longitudinal-spin (burnout). Drives smoke/spark visuals.
-	/// </summary>
+	public float TotalSpeed => Velocity.Length();
+	public bool IsReversing => _forwardSpeed < -5f;
+	public float BoostCharge => _boostCharge;
+	public bool IsBurningOut => _isBurningOut;
 	public float TireSpinIntensity =>
 		Mathf.Max(DriftIntensity, _isBurningOut ? _boostCharge : 0f);
 
@@ -83,26 +75,166 @@ public partial class PlayerCar : CharacterBody2D
 	private ShaderMaterial _mat;
 	private ShaderMaterial _glowMat;
 	private SmoothCamera _camera;
+	private RamSystem _ramSystem;
 	private float _shakeCooldown;
-	private bool  _drifting;
+	private bool _drifting;
 	private float _friction;
-	private bool  _prevHandbrake;
-	private bool  _handbrakeHeld;
-	private bool  _wasHandbraking;
+	private bool _prevHandbrake;
+	private bool _handbrakeHeld;
+	private bool _wasHandbraking;
 	private float _boostCharge;
-	private bool  _isBurningOut;
-
+	private bool _isBurningOut;
+	public Vector2 VelocityDirection => Velocity.Length() > 1f ? Velocity.Normalized() : Transform.X;
 	public override void _Ready()
 	{
 		_heading = GlobalRotation;
 		_friction = GripFriction;
 		MotionMode = MotionModeEnum.Floating;
-		var sprite = GetNode<Sprite2D>("Sprite2D");
-		_mat = sprite.Material as ShaderMaterial;
 
-		var glowSprite = GetNode<Sprite2D>("GlowSprite");
-		_glowMat = glowSprite.Material as ShaderMaterial;
+		var sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
+		_mat = sprite?.Material as ShaderMaterial;
+		if (_mat == null)
+			GD.PushWarning("PlayerCar: No ShaderMaterial on Sprite2D.");
+
+		var glowSprite = GetNodeOrNull<Sprite2D>("GlowSprite");
+		_glowMat = glowSprite?.Material as ShaderMaterial;
+
 		_camera = GetNodeOrNull<SmoothCamera>("Camera2D");
+		_ramSystem = GetNodeOrNull<RamSystem>("RamSystem");
+
+		// Connect impact signal to camera (decoupled)
+		if (_camera != null)
+			Impact += (intensity) => _camera.AddTrauma(intensity);
+
+		// ── Headlight setup ──────────────────────────────────────────────────────
+		// Position is left to the inspector (no override here). Place each
+		// PointLight2D node at the headlight lens on your car sprite.
+		//
+		// Shadow note: shadow_enabled is intentionally OFF.
+		//   In Godot 4 the shadow algorithm breaks when a PointLight2D source
+		//   lands inside any LightOccluder2D polygon (the entire light goes
+		//   black). Because the headlight nodes sit at the car's visual nose —
+		//   well ahead of the physics collision shape — they inevitably enter
+		//   obstacle polygons as the car drives close. Disabling shadows removes
+		//   that artifact entirely. The ground illumination effect (asphalt glow
+		//   ahead of the car) is preserved; only hard obstacle silhouettes are
+		//   lost, which are barely noticeable in a top-down racing context.
+		//
+		// Scale: forward reach = (texWidth × scale) / 2
+		//        → scale = (2 × reach) / texWidth
+		const float HeadlightReach = 400f;
+
+		var beamTex = ResourceLoader.Load<Texture2D>(
+			"res://assets/sprite/pngimg.com - light_beam_PNG29.png");
+
+		// if (beamTex != null)
+		// {
+		// 	float beamScale = (HeadlightReach * 2f) / beamTex.GetWidth();
+
+		// 	foreach (var child in GetChildren())
+		// 	{
+		// 		if (child is not PointLight2D hl) continue;
+		// 		hl.Texture       = beamTex;
+		// 		hl.TextureScale  = beamScale;
+		// 		hl.BlendMode     = Light2D.BlendModeEnum.Add;
+		// 		hl.ShadowEnabled = true;  // see note above
+		// 		hl.RangeZMax     = -1;      // don't illuminate z=1 obstacle sprites
+		// 	}
+		// }
+		// else
+		// {
+		// 	GD.PushWarning("PlayerCar: headlight texture not found — check the res:// path.");
+		// }
+
+		// Apply vehicle data from registry if available
+		var registry = VehicleRegistry.Instance;
+		if (registry?.SelectedVehicle != null)
+			ApplyVehicleData(registry.SelectedVehicle);
+	}
+
+	/// <summary>
+	/// Apply a VehicleData resource to this car, overwriting all tuning
+	/// parameters, visuals, and collision shape. Safe to call at runtime.
+	/// </summary>
+	public void ApplyVehicleData(VehicleData data)
+	{
+		if (data == null) return;
+
+		// Engine
+		MaxSpeed = data.MaxSpeed;
+		Acceleration = data.Acceleration;
+		BrakeForce = data.BrakeForce;
+		CoastDrag = data.CoastDrag;
+		AeroDrag = data.AeroDrag;
+		DriftThrottleBlend = data.DriftThrottleBlend;
+
+		// Steering
+		Wheelbase = data.Wheelbase;
+		MaxSteerAngle = data.MaxSteerAngle;
+		MinSteerSpeed = data.MinSteerSpeed;
+		HighSpeedSteerReduction = data.HighSpeedSteerReduction;
+
+		// Traction
+		GripFriction = data.GripFriction;
+		DriftFriction = data.DriftFriction;
+		TireGrip = data.TireGrip;
+		GripSpeedFalloff = data.GripSpeedFalloff;
+		SlipStartThreshold = data.SlipStartThreshold;
+		SlipEndThreshold = data.SlipEndThreshold;
+		SteerDriftSpeed = data.SteerDriftSpeed;
+		SteerDriftInput = data.SteerDriftInput;
+
+		// Handbrake
+		HandbrakeDrag = data.HandbrakeDrag;
+		HandbrakeYawRate = data.HandbrakeYawRate;
+		KickImpulse = data.KickImpulse;
+		HandbrakeFrictionMul = data.HandbrakeFrictionMul;
+		CounterSteerRecovery = data.CounterSteerRecovery;
+
+		// Boost
+		BoostLaunchSpeed = data.BoostLaunchSpeed;
+		BoostBuildRate = data.BoostBuildRate;
+		BoostDecayRate = data.BoostDecayRate;
+		BoostEntrySpeed = data.BoostEntrySpeed;
+		BoostMinCharge = data.BoostMinCharge;
+
+		// Reset friction to new grip value
+		_friction = GripFriction;
+
+		// Visuals
+		var sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
+		if (sprite != null && data.SpriteTexture != null)
+			sprite.Texture = data.SpriteTexture;
+
+		var glowSprite = GetNodeOrNull<Sprite2D>("GlowSprite");
+		if (glowSprite != null && data.SpriteTexture != null)
+			glowSprite.Texture = data.SpriteTexture;
+
+		if (_mat != null)
+		{
+			_mat.SetShaderParameter("base_tint", data.BaseTint);
+			_mat.SetShaderParameter("accent_tint", data.AccentTint);
+		}
+
+		if (_glowMat != null)
+			_glowMat.SetShaderParameter("glow_color", data.GlowColor);
+
+		// Collision shape
+		var collShape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
+		if (collShape?.Shape is RectangleShape2D rect)
+			rect.Size = data.CollisionSize;
+
+		// Health (via Damageable component)
+		var damageable = GetNodeOrNull<Damageable>("Damageable");
+		if (damageable != null)
+		{
+			damageable.MaxHealth = data.MaxHealth;
+			damageable.Reset();
+		}
+
+		// Ram damage (via RamSystem component)
+		if (_ramSystem != null)
+			_ramSystem.RamDamage = data.RamDamage;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -112,7 +244,12 @@ public partial class PlayerCar : CharacterBody2D
 		float throttle = Input.GetAxis("drive_reverse", "drive_forward");
 		float steerIn = Input.GetAxis("steer_left", "steer_right");
 		bool handbrake = Input.IsActionPressed("handbrake");
-		bool justPulled   = handbrake && !_prevHandbrake;
+		bool engineBraking = Mathf.Abs(_forwardSpeed) > 20f 
+                          && !Mathf.IsZeroApprox(throttle) 
+                          && Mathf.Sign(throttle) != Mathf.Sign(_forwardSpeed);
+        
+        IsBraking = handbrake || engineBraking;
+		bool justPulled = handbrake && !_prevHandbrake;
 		bool justReleased = !handbrake && _prevHandbrake;
 		_prevHandbrake = handbrake;
 		_handbrakeHeld = handbrake;
@@ -137,38 +274,29 @@ public partial class PlayerCar : CharacterBody2D
 		_forwardSpeed = vel.X * cosH + vel.Y * sinH;
 		_lateralSpeed = -vel.X * sinH + vel.Y * cosH;
 
-		// Update direction flags after decomposition
 		goingForward = _forwardSpeed > 5f;
 		goingReverse = _forwardSpeed < -5f;
 
-		// ── 2. Handbrake kick (angular impulse on pull) ─────────────────────
+		// ── 2. Handbrake kick ─────────────────────────────────────────────────
 		if (justPulled && Mathf.Abs(_forwardSpeed) > 40f)
 		{
 			_drifting = true;
 
 			if (goingReverse)
 			{
-				// J-TURN: big kick to spin the car 180°.
-				// Always kicks toward steer direction, or defaults to +1.
-				// Larger impulse than forward drift to get the full rotation going.
 				float kickDir = Mathf.Abs(steerIn) > 0.1f ? Mathf.Sign(steerIn) : 1f;
 				float speedFactor = Mathf.Clamp(Mathf.Abs(_forwardSpeed) / MaxSpeed, 0.4f, 1f);
 				_heading += kickDir * KickImpulse * 2.5f * speedFactor;
 			}
 			else
 			{
-				// Forward drift kick
 				float kickDir = Mathf.Abs(steerIn) > 0.1f ? Mathf.Sign(steerIn) : 1f;
 				float speedFactor = Mathf.Clamp(_forwardSpeed / MaxSpeed, 0.3f, 1f);
 				_heading += kickDir * KickImpulse * speedFactor;
 			}
 		}
 
-		// ── 3. Handbrake yaw (sustained heading rotation while held) ──────────
-		//    Forward: heading rotates, velocity re-decomposes → drift slide.
-		//    Reverse: faster yaw to spin 180° (J-turn). As heading passes 90°
-		//    the decomposition naturally flips _forwardSpeed from negative to
-		//    positive — the car comes out going forward.
+		// ── 3. Handbrake yaw ──────────────────────────────────────────────────
 		float totalSpeed = vel.Length();
 		if (handbrake && totalSpeed > 10f)
 		{
@@ -179,34 +307,28 @@ public partial class PlayerCar : CharacterBody2D
 			}
 			else if (goingReverse)
 			{
-				// No steer input during reverse handbrake: pick a direction
-				// based on existing lateral speed, or default to +1
 				yawDir = Mathf.Abs(_lateralSpeed) > 5f ? Mathf.Sign(_lateralSpeed) : 1f;
 			}
 
 			if (!Mathf.IsZeroApprox(yawDir))
 			{
 				float speedRatio = Mathf.Clamp(totalSpeed / MaxSpeed, 0.2f, 1f);
-				// Faster yaw in reverse for the J-turn snap
 				float yawRate = goingReverse ? HandbrakeYawRate * 1.8f : HandbrakeYawRate;
 				_heading += yawDir * yawRate * speedRatio * dt;
 			}
 
-			// Re-decompose with new heading
 			cosH = Mathf.Cos(_heading);
 			sinH = Mathf.Sin(_heading);
 			_forwardSpeed = vel.X * cosH + vel.Y * sinH;
 			_lateralSpeed = -vel.X * sinH + vel.Y * cosH;
 
-			// Update direction flags — the J-turn can flip these mid-frame
 			goingForward = _forwardSpeed > 5f;
 			goingReverse = _forwardSpeed < -5f;
 		}
 
-		// ── 4. Throttle & drag ──────────────────────────────────────────────
+		// ── 4. Throttle & drag ────────────────────────────────────────────────
 		if (handbrake)
 		{
-			// Gentle drag — preserve momentum through drifts/J-turns
 			_forwardSpeed = Mathf.MoveToward(_forwardSpeed, 0f, HandbrakeDrag * dt);
 		}
 		else if (!Mathf.IsZeroApprox(throttle))
@@ -220,13 +342,6 @@ public partial class PlayerCar : CharacterBody2D
 			}
 			else if (_drifting && Mathf.Abs(_lateralSpeed) > SlipEndThreshold)
 			{
-				// DRIFT THROTTLE: accelerate along the velocity direction, not
-				// the car's heading. This maintains the slide angle — you power
-				// through the drift rather than fighting it.
-				//
-				// We split the acceleration into forward and lateral components
-				// based on the ratio of current velocity. The blend factor
-				// controls how much of this effect applies (0 = normal, 1 = full).
 				float absF = Mathf.Abs(_forwardSpeed);
 				float absL = Mathf.Abs(_lateralSpeed);
 				float totalLocal = absF + absL;
@@ -235,16 +350,11 @@ public partial class PlayerCar : CharacterBody2D
 				{
 					float fwdRatio = absF / totalLocal;
 					float latRatio = absL / totalLocal;
-
 					float accelAmount = Acceleration * Mathf.Abs(throttle) * dt;
 
-					// Forward component: accelerate toward heading direction
 					float fwdAccel = accelAmount * Mathf.Lerp(1f, fwdRatio, DriftThrottleBlend);
 					_forwardSpeed = Mathf.MoveToward(_forwardSpeed, throttle * MaxSpeed, fwdAccel);
 
-					// Lateral component: sustain the slide — push lateral speed
-					// in its current direction proportional to throttle.
-					// This is what makes powering through a drift feel right.
 					float latAccel = accelAmount * latRatio * DriftThrottleBlend;
 					float latSign = Mathf.Sign(_lateralSpeed);
 					_lateralSpeed += latSign * latAccel;
@@ -256,35 +366,26 @@ public partial class PlayerCar : CharacterBody2D
 			}
 			else
 			{
-				// Normal (non-drift) throttle
 				_forwardSpeed = Mathf.MoveToward(_forwardSpeed, throttle * MaxSpeed, Acceleration * dt);
 			}
 		}
 		else
 		{
-			// Coasting: constant base drag
 			_forwardSpeed = Mathf.MoveToward(_forwardSpeed, 0f, CoastDrag * dt);
 		}
 
-		// Quadratic aero drag — applied always on top of everything else.
-		// Acts on total speed so it works during drifts too.
-		// drag_force = AeroDrag * speed², applied as deceleration to forward speed.
-		// This gives a natural top speed curve: the faster you go, the harder
-		// the air pushes back. At equilibrium, Acceleration = AeroDrag * speed².
+		// Quadratic aero drag
 		{
 			float speed = Mathf.Abs(_forwardSpeed);
-			float dragForce = AeroDrag * speed * (speed / MaxSpeed); // normalized so tuning is intuitive
+			float dragForce = AeroDrag * speed * (speed / MaxSpeed);
 			_forwardSpeed = Mathf.MoveToward(_forwardSpeed, 0f, dragForce * dt);
 
-			// Also drag lateral speed during drifts so slides naturally decay
 			float latSpeed = Mathf.Abs(_lateralSpeed);
 			float latDrag = AeroDrag * 0.5f * latSpeed * (latSpeed / MaxSpeed);
 			_lateralSpeed = Mathf.MoveToward(_lateralSpeed, 0f, latDrag * dt);
 		}
 
 		// ── 4b. Boost start ───────────────────────────────────────────────────
-		// Hold handbrake + throttle while near-stationary to spin the rear tires
-		// and charge a launch. Release the handbrake to rocket forward.
 		bool canBurnout = handbrake
 			&& throttle > 0.2f
 			&& Mathf.Abs(_forwardSpeed) < BoostEntrySpeed;
@@ -293,27 +394,22 @@ public partial class PlayerCar : CharacterBody2D
 
 		if (canBurnout)
 		{
-			// Charge builds proportionally to throttle input
 			_boostCharge = Mathf.Min(1f, _boostCharge + BoostBuildRate * throttle * dt);
 		}
 		else if (justReleased && _boostCharge >= BoostMinCharge)
 		{
-			// LAUNCH: override forward speed with the stored charge
 			float launch = BoostLaunchSpeed * _boostCharge;
 			_forwardSpeed = Mathf.Max(_forwardSpeed, launch);
-			_camera?.AddTrauma(0.35f + _boostCharge * 0.3f);
+			EmitSignal(SignalName.Impact, 0.35f + _boostCharge * 0.3f);
 			_boostCharge = 0f;
-			_drifting = true;   // wheelspin immediately enters drift state
+			_drifting = true;
 		}
 		else
 		{
-			// Bleed charge away when not actively building
 			_boostCharge = Mathf.MoveToward(_boostCharge, 0f, BoostDecayRate * dt);
 		}
 
 		// ── 5. Steering ──────────────────────────────────────────────────────
-		// During forward handbrake, yaw is handled in step 3. Otherwise use
-		// bicycle model. In reverse, steer direction stays intuitive (left = left).
 		bool handbrakeYawActive = handbrake && goingForward;
 
 		if (!handbrakeYawActive && !Mathf.IsZeroApprox(steerIn))
@@ -327,7 +423,6 @@ public partial class PlayerCar : CharacterBody2D
 				float absForward = Mathf.Abs(_forwardSpeed);
 				float speedRatio = Mathf.Clamp(absForward / MaxSpeed, 0f, 1f);
 
-				// Less steer reduction in reverse (you need full lock at low speed)
 				float reduction = goingReverse
 					? HighSpeedSteerReduction * 0.3f
 					: HighSpeedSteerReduction;
@@ -336,25 +431,13 @@ public partial class PlayerCar : CharacterBody2D
 
 				float steerSpeed = Mathf.Max(absForward, MinSteerSpeed);
 
-				// In reverse, keep steer direction intuitive: left input = car goes left.
-				// The bicycle model naturally inverts for negative forward speed via turnSign,
-				// but arcade games feel better with direct mapping. We negate the inversion.
-				// In forward or during drift recovery, use physics-correct sign.
 				float turnSign;
 				if (_drifting && absForward < 30f)
-				{
-					turnSign = 1f;  // direct mapping during drift recovery
-				}
+					turnSign = 1f;
 				else if (goingReverse)
-				{
-					turnSign = -1f; // physics-correct: rear-steer inverts heading
-									// This makes the car's nose go the steer direction
-									// because the rear pushes opposite
-				}
+					turnSign = -1f;
 				else
-				{
-					turnSign = 1f;  // forward
-				}
+					turnSign = 1f;
 
 				float omega = steerSpeed * Mathf.Tan(steerAngle) / Wheelbase;
 				_heading += turnSign * omega * dt;
@@ -364,7 +447,6 @@ public partial class PlayerCar : CharacterBody2D
 		// ── 6. Traction state machine ─────────────────────────────────────────
 		float absLateral = Mathf.Abs(_lateralSpeed);
 
-		// Only allow steer-drift entry when going forward
 		bool steerDriftEntry = goingForward
 							&& Mathf.Abs(steerIn) >= SteerDriftInput
 							&& _forwardSpeed > SteerDriftSpeed;
@@ -374,10 +456,6 @@ public partial class PlayerCar : CharacterBody2D
 			if (!_drifting && handbrake)
 				_wasHandbraking = true;
 
-			// On the first frame of a steer-initiated drift, give a lateral
-			// kick to get the slide going. Without this the grip correction
-			// fights the natural heading-rotation slip and the drift never builds.
-			// Sign: turning right (steerIn > 0) → rear slides left → negative lateral.
 			if (!_drifting && steerDriftEntry && !handbrake)
 				_lateralSpeed -= Mathf.Sign(steerIn) * 40f;
 
@@ -395,13 +473,10 @@ public partial class PlayerCar : CharacterBody2D
 
 		if (handbrake)
 		{
-			// Low lateral friction while handbrake held — car slides freely
-			// for both forward drifts and reverse J-turns
 			targetFriction = baseFriction * HandbrakeFrictionMul;
 		}
 		else if (_drifting && _wasHandbraking && _IsCounterSteering(steerIn))
 		{
-			// Counter-steer recovery: boosted friction to straighten out
 			targetFriction = baseFriction + CounterSteerRecovery;
 		}
 		else
@@ -427,59 +502,68 @@ public partial class PlayerCar : CharacterBody2D
 
 		MoveAndSlide();
 
-		// ── 9. Wall impact absorption ─────────────────────────────────────────
-		// MoveAndSlide resolves penetration but leaves the parallel (slide)
-		// component intact. Without this step, _forwardSpeed/_lateralSpeed are
-		// still at their pre-collision values, so the car shoves into the wall
-		// every subsequent frame producing a bounce-slide loop.
-		//
-		// On any collision we:
-		//   a) strip residual into-wall velocity (in case MoveAndSlide missed any)
-		//   b) damp the remaining parallel speed heavily (solid wall feel)
-		//   c) sync internal speed state so the next frame starts correctly
+		// ── 9. Ram system (processes enemy collisions) ────────────────────────
+		_ramSystem?.ProcessCollisions();
+
+		// ── 10. Wall impact absorption (environment only) ─────────────────────
 		int slideHits = GetSlideCollisionCount();
 		if (slideHits > 0)
 		{
-			float worstImpact = 0f;   // largest into-wall speed across all contacts
+			float worstImpact = 0f;
 
 			for (int i = 0; i < slideHits; i++)
 			{
-				Vector2 n = GetSlideCollision(i).GetNormal();
+				var collision = GetSlideCollision(i);
+				var collider = collision.GetCollider();
+
+				// Skip enemies — RamSystem handles those
+				if (collider is Node2D node && node.IsInGroup("enemies"))
+					continue;
+
+				Vector2 n = collision.GetNormal();
 				float penetration = Velocity.Dot(n);
 				if (penetration < 0f)
 				{
-					Velocity    -= penetration * n;        // remove into-wall component
-					worstImpact  = Mathf.Max(worstImpact, -penetration);
+					Velocity -= penetration * n;
+					worstImpact = Mathf.Max(worstImpact, -penetration);
 				}
 			}
 
-			// Scale damping by how head-on the impact was:
-			//   grazing (low impactFraction) → barely any speed loss
-			//   direct T-bone (high impactFraction) → significant loss
-			float hitSpeed     = Mathf.Max(Velocity.Length(), 1f);
-			float impactFraction = Mathf.Clamp(worstImpact / hitSpeed, 0f, 1f);
-			float damp = Mathf.Lerp(0.85f, 0.40f, impactFraction);
-			Velocity *= damp;
-
-			// Sync internal frame so next tick starts from the reduced velocity.
-			float cosH2 = Mathf.Cos(_heading);
-			float sinH2 = Mathf.Sin(_heading);
-			_forwardSpeed = Velocity.X * cosH2 + Velocity.Y * sinH2;
-			_lateralSpeed = -(Velocity.X * sinH2) + Velocity.Y * cosH2;
-
-			// Only cancel drift/boost on a genuine hard hit
-			if (impactFraction > 0.5f)
+			if (worstImpact > 0f)
 			{
-				if (_shakeCooldown <= 0f)
+				float hitSpeed = Mathf.Max(Velocity.Length(), 1f);
+				float impactFraction = Mathf.Clamp(worstImpact / hitSpeed, 0f, 1f);
+				float damp = Mathf.Lerp(0.85f, 0.40f, impactFraction);
+				Velocity *= damp;
+
+				// Sync internal frame
+				float cosH2 = Mathf.Cos(_heading);
+				float sinH2 = Mathf.Sin(_heading);
+				_forwardSpeed = Velocity.X * cosH2 + Velocity.Y * sinH2;
+				_lateralSpeed = -(Velocity.X * sinH2) + Velocity.Y * cosH2;
+
+				if (impactFraction > 0.5f)
 				{
-					_camera?.AddTrauma(impactFraction * 0.55f);
-					_shakeCooldown = 0.4f;
+					if (_shakeCooldown <= 0f)
+					{
+						EmitSignal(SignalName.Impact, impactFraction * 0.55f);
+						_shakeCooldown = 0.4f;
+					}
+					_drifting = false;
+					_boostCharge = 0f;
 				}
-				_drifting    = false;
-				_boostCharge = 0f;
 			}
 		}
 
+		Vector2 velDir = Velocity.Length() > 1f ? Velocity.Normalized() : Vector2.Right;
+
+		// You already have most of this, just ensure it's present:
+		if (_mat != null)
+		{
+			_mat.SetShaderParameter("velocity_dir", velDir);
+		}
+
+		
 		_heading = Mathf.Wrap(_heading, -Mathf.Pi, Mathf.Pi);
 		GlobalRotation = _heading;
 
@@ -487,10 +571,6 @@ public partial class PlayerCar : CharacterBody2D
 			QueueRedraw();
 	}
 
-	/// <summary>
-	/// Counter-steer: steering opposite the slide direction to recover.
-	/// Only meaningful after a handbrake drift.
-	/// </summary>
 	private bool _IsCounterSteering(float steerIn)
 	{
 		if (Mathf.Abs(steerIn) < 0.1f || Mathf.Abs(_lateralSpeed) < SlipEndThreshold)
@@ -506,7 +586,6 @@ public partial class PlayerCar : CharacterBody2D
 		Color slipColor = _drifting ? Colors.Orange : Colors.Red;
 		DrawLine(Vector2.Zero, Vector2.Down * _lateralSpeed * 0.5f, slipColor, 3f);
 
-		// Speed text
 		DrawString(ThemeDB.FallbackFont, new Vector2(-40, -30),
 			$"F:{_forwardSpeed:F0} L:{_lateralSpeed:F0} D:{(_drifting ? "Y" : "N")}",
 			HorizontalAlignment.Left, -1, 12, Colors.White);

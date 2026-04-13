@@ -7,6 +7,11 @@
 [ext_resource type="Shader" uid="uid://odeem75jbu4m" path="res://shaders/tire_glow.gdshader" id="5_tireglow"]
 [ext_resource type="Script" uid="uid://g8xl6w5bnqa7" path="res://scripts/TireTrail.cs" id="5_y4ebs"]
 [ext_resource type="Script" uid="uid://cddy1v0yidjpj" path="res://scripts/SmoothCamera.cs" id="7_0kxao"]
+[ext_resource type="Script" uid="uid://co2nn4qw0x4ry" path="res://scripts/Damageable.cs" id="8_7iysn"]
+[ext_resource type="Script" uid="uid://d2mi6ruxddips" path="res://scripts/RamSystem.cs" id="9_ha3po"]
+[ext_resource type="Script" uid="uid://d3uqtotm6yyox" path="res://scripts/HitFlash.cs" id="10_e73mi"]
+[ext_resource type="Texture2D" uid="uid://bx24kqsoek0sr" path="res://assets/sprite/headlight_beam.png" id="11_ha3po"]
+[ext_resource type="Texture2D" uid="uid://2to7xwpfglg8" path="res://assets/sprite/pngimg.com - light_beam_PNG29.png" id="12_e73mi"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_Car"]
 shader = ExtResource("3_car")
@@ -25,6 +30,9 @@ shader_parameter/speed = 0.0
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(56, 28)
+
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_Car"]
+polygon = PackedVector2Array(-28, -14, 28, -14, 28, 14, -28, 14)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_Default"]
 direction = Vector3(0, -1, 0)
@@ -47,6 +55,7 @@ shader_parameter/heat_color = Color(1, 0.3, 0.05, 1)
 shader_parameter/intensity = 0.0
 
 [node name="PlayerCar" type="CharacterBody2D" unique_id=142772476]
+collision_mask = 6
 script = ExtResource("1_54ksr")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
@@ -66,6 +75,10 @@ texture = ExtResource("2_gty54")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1324816516]
 shape = SubResource("RectangleShape2D_1")
 
+[node name="LightOccluder2D" type="LightOccluder2D" parent="." unique_id=838471200]
+occluder = SubResource("OccluderPolygon2D_Car")
+occluder_light_mask = 2
+
 [node name="TireTrailL" type="Node2D" parent="." unique_id=1538886769]
 position = Vector2(-22, -11)
 script = ExtResource("5_y4ebs")
@@ -80,6 +93,7 @@ process_material = SubResource("ParticleProcessMaterial_Default")
 
 [node name="TireGlow" type="Sprite2D" parent="TireTrailL" unique_id=1203094943]
 material = SubResource("ShaderMaterial_TireGlow")
+position = Vector2(0, 0.99999994)
 scale = Vector2(0.35, 0.35)
 
 [node name="TireTrailR" type="Node2D" parent="." unique_id=109325865]
@@ -97,6 +111,7 @@ process_material = SubResource("ParticleProcessMaterial_Default")
 
 [node name="TireGlow" type="Sprite2D" parent="TireTrailR" unique_id=1980389189]
 material = SubResource("ShaderMaterial_TireGlow")
+position = Vector2(0, -0.99999994)
 scale = Vector2(0.35, 0.35)
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=400778302]
@@ -107,3 +122,59 @@ ZoomIdle = 1.4
 ZoomFast = 1.0
 ZoomFullSpeed = 420.0
 ZoomSharpness = 1.8
+
+[node name="Damageable" type="Node" parent="." unique_id=2086300835]
+script = ExtResource("8_7iysn")
+
+[node name="RamSystem" type="Node" parent="." unique_id=257189219]
+script = ExtResource("9_ha3po")
+
+[node name="HitFlash" type="Node" parent="." unique_id=1515865463]
+script = ExtResource("10_e73mi")
+
+[node name="Headlightl" type="PointLight2D" parent="." unique_id=1060348402]
+visible = false
+texture_filter = 1
+position = Vector2(259, -8)
+rotation = -3.1415925
+energy = 5.0
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 3.0
+texture = ExtResource("12_e73mi")
+height = 400.0
+
+[node name="HeadlightLOLD" type="PointLight2D" parent="." unique_id=391176655]
+texture_filter = 1
+position = Vector2(263, -9)
+rotation = -3.1415925
+color = Color(0.3491902, 0.6651851, 0.95468724, 1)
+energy = 5.0
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 20.0
+texture = ExtResource("11_ha3po")
+
+[node name="HeadlightR" type="PointLight2D" parent="." unique_id=1505253995]
+visible = false
+texture_filter = 1
+position = Vector2(258, 8)
+rotation = 3.1415927
+color = Color(0.3818348, 0.3818348, 0.3818348, 1)
+energy = 10.0
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 3.0
+texture = ExtResource("12_e73mi")
+height = 400.0
+
+[node name="HeadlightROLD" type="PointLight2D" parent="." unique_id=1861123056]
+texture_filter = 1
+position = Vector2(264, 10)
+rotation = 3.1415927
+color = Color(0.3491902, 0.6651851, 0.95468724, 1)
+energy = 5.0
+shadow_enabled = true
+shadow_filter = 1
+shadow_filter_smooth = 20.0
+texture = ExtResource("11_ha3po")

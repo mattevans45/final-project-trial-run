@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3 uid="uid://ctgfsthrtgnxf"]
+
+[ext_resource type="Texture2D" uid="uid://cgjkd7dbvoa2r" path="res://assets/sprite/RSeries.png" id="1_38wh8"]
+[ext_resource type="Script" uid="uid://vkk4rndyht2g" path="res://scripts/VehicleData.cs" id="2_chcf7"]
+
+[resource]
+script = ExtResource("2_chcf7")
+DisplayName = "Tanky"
+Description = "Slow but tank"
+SpriteTexture = ExtResource("1_38wh8")
+BaseTint = Color(0.5847179, 0.64995646, 0.5657284, 1)
+AccentTint = Color(0.92941177, 0.42352942, 0.34901962, 1)
+GlowColor = Color(1, 0.48452926, 0.24780053, 1)
+MaxSpeed = 340.0
+Acceleration = 600.0
+Wheelbase = 200.0
+MaxSteerAngle = 30.0
+HighSpeedSteerReduction = 0.12
+SlipStartThreshold = 160.0
+HandbrakeYawRate = 2.8
+KickImpulse = 0.08
+BoostLaunchSpeed = 400.0
+BoostBuildRate = 0.9
+MaxHealth = 200.0
+RamDamage = 55.0
+Armor = 10.0
+CollisionSize = Vector2(110, 44)
+metadata/_custom_type_script = "uid://vkk4rndyht2g"

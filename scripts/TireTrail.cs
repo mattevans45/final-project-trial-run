@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Tire marks (Line2D) + drift sparks (GPUParticles2D) + tire heat glow at each rear wheel.
-/// Reuses DriftSparks and TireGlow nodes placed in the scene.
+/// Cleans up Line2D nodes on tree exit to prevent leaks.
 /// </summary>
 public partial class TireTrail : Node2D
 {
@@ -16,7 +16,7 @@ public partial class TireTrail : Node2D
     [Export] public int MaxTrails        = 30;
 
     [ExportGroup("Glow")]
-    [Export] public float GlowOutwardPush = 4f;  // units to push glow toward car edge
+    [Export] public float GlowOutwardPush = 4f;
 
     private PlayerCar _car;
     private Line2D _currentLine;
@@ -27,9 +27,6 @@ public partial class TireTrail : Node2D
     private GpuParticles2D _smoke;
     private ShaderMaterial _tireGlowMat;
     private Sprite2D _tireGlowSprite;
-
-    // Local offset stores our position relative to the car before TopLevel is applied.
-    // The Y sign tells us which side of the car this wheel is on (-=left, +=right).
     private Vector2 _localOffset;
 
     private class TrailSegment
@@ -50,7 +47,9 @@ public partial class TireTrail : Node2D
         _localOffset = Position;
         TopLevel = true;
 
-        // ── Sparks ────────────────────────────────────────────────────────────
+        // Clean up Line2D nodes when leaving the tree (scene change, QueueFree, etc.)
+        TreeExiting += _CleanupTrails;
+
         _sparks = GetNodeOrNull<GpuParticles2D>("DriftSparks");
         if (_sparks != null)
         {
@@ -58,27 +57,33 @@ public partial class TireTrail : Node2D
             _ConfigureSparks(_sparks);
         }
 
-        // ── Smoke ─────────────────────────────────────────────────────────────
         _smoke = new GpuParticles2D();
         _smoke.TopLevel = true;
         _smoke.ZIndex   = -1;
         _ConfigureSmoke(_smoke);
         AddChild(_smoke);
 
-        // ── Tire heat glow ────────────────────────────────────────────────────
         _tireGlowSprite = GetNodeOrNull<Sprite2D>("TireGlow");
         if (_tireGlowSprite != null && _tireGlowSprite.Material is ShaderMaterial sharedMat)
         {
             _tireGlowMat = (ShaderMaterial)sharedMat.Duplicate();
             _tireGlowSprite.Material = _tireGlowMat;
             _tireGlowSprite.Texture = _CreateSoftCircle(32);
-
-            // Squished ellipse: wide along car forward, narrow laterally.
-            // GlobalRotation is updated each frame to match the car heading.
             _tireGlowSprite.Scale = new Vector2(0.42f, 0.18f);
-            _tireGlowSprite.ZIndex = -1;   // render behind the car body
+            _tireGlowSprite.ZIndex = -1;
             _tireGlowSprite.TopLevel = true;
         }
+    }
+
+    private void _CleanupTrails()
+    {
+        foreach (var seg in _trails)
+        {
+            if (IsInstanceValid(seg.Line))
+                seg.Line.QueueFree();
+        }
+        _trails.Clear();
+        _currentLine = null;
     }
 
     private void _ConfigureSparks(GpuParticles2D sparks)
@@ -87,31 +92,29 @@ public partial class TireTrail : Node2D
         sparks.Amount        = 18;
         sparks.Lifetime      = 0.4f;
         sparks.SpeedScale    = 1.0f;
-        sparks.Explosiveness = 0.85f;  // emit in bursts
+        sparks.Explosiveness = 0.85f;
         sparks.OneShot       = false;
         sparks.ZIndex        = 2;
 
-        // Additive blend so sparks visibly brighten everything beneath them
         var cim = new CanvasItemMaterial();
         cim.BlendMode = CanvasItemMaterial.BlendModeEnum.Add;
         sparks.Material = cim;
 
         var mat = new ParticleProcessMaterial();
         mat.Direction            = new Vector3(0, 0, 0);
-        mat.Spread               = 180f;    // omni-directional burst
+        mat.Spread               = 180f;
         mat.InitialVelocityMin   = 90f;
         mat.InitialVelocityMax   = 220f;
         mat.AngularVelocityMin   = -360f;
         mat.AngularVelocityMax   = 360f;
         mat.Gravity              = new Vector3(0, 0, 0);
         mat.LinearAccelMin       = -180f;
-        mat.LinearAccelMax       = -80f;    // decelerate sharply = short streaks
+        mat.LinearAccelMax       = -80f;
         mat.DampingMin           = 120f;
         mat.DampingMax           = 200f;
         mat.ScaleMin             = 0.06f;
         mat.ScaleMax             = 0.14f;
 
-        // White → yellow → orange → fade
         var colorRamp = new GradientTexture1D();
         var gradient  = new Gradient();
         gradient.SetColor(0, new Color(1.0f, 1.0f, 0.9f, 1.0f));
@@ -130,7 +133,7 @@ public partial class TireTrail : Node2D
         smoke.Emitting      = false;
         smoke.Amount        = 16;
         smoke.Lifetime      = 0.75f;
-        smoke.SpeedScale    = 0.4f;   // start low; driven up at runtime via SpeedScale
+        smoke.SpeedScale    = 0.4f;
         smoke.Explosiveness = 0.0f;
 
         var mat = new ParticleProcessMaterial();
@@ -143,7 +146,7 @@ public partial class TireTrail : Node2D
         mat.Gravity            = new Vector3(0, -6f, 0);
         mat.LinearAccelMin     = -8f;
         mat.LinearAccelMax     = -3f;
-        mat.ScaleMin           = 0.25f;   // fixed at birth — not changed at runtime
+        mat.ScaleMin           = 0.25f;
         mat.ScaleMax           = 0.55f;
         mat.DampingMin         = 10f;
         mat.DampingMax         = 18f;
@@ -160,7 +163,6 @@ public partial class TireTrail : Node2D
         smoke.Texture = _CreateSoftCircle(32);
     }
 
-    // Tiny bright centre dot for each spark particle
     private GradientTexture2D _CreateSparkDot(int size)
     {
         var tex = new GradientTexture2D();
@@ -176,7 +178,6 @@ public partial class TireTrail : Node2D
         return tex;
     }
 
-    // Soft radial circle used for the tire heat glow
     private GradientTexture2D _CreateSoftCircle(int size)
     {
         var tex = new GradientTexture2D();
@@ -200,14 +201,12 @@ public partial class TireTrail : Node2D
         float dt        = (float)delta;
         float intensity = _car.TireSpinIntensity;
 
-        // Tire marks only appear when the car is actually moving (rubber on road).
-        // Smoke and sparks also fire during a stationary burnout.
         bool shouldMark  = intensity > 0.08f && _car.Speed > 20f;
         bool shouldEffect = intensity > 0.08f;
 
         Vector2 wheelWorldPos = _car.ToGlobal(_localOffset);
 
-        // ── Sparks ────────────────────────────────────────────────────────────
+        // Sparks
         if (_sparks != null)
         {
             _sparks.GlobalPosition = wheelWorldPos;
@@ -220,28 +219,21 @@ public partial class TireTrail : Node2D
             }
         }
 
-        // ── Smoke ─────────────────────────────────────────────────────────────
+        // Smoke
         if (_smoke != null)
         {
             _smoke.GlobalPosition = wheelWorldPos;
             _smoke.Emitting = shouldEffect;
-
-            // SpeedScale is the only safe runtime knob — it controls spawn rate and
-            // movement speed without touching per-particle attributes on live particles.
             _smoke.SpeedScale = 0.3f + 1.4f * intensity;
         }
 
-        // ── Tire heat glow ────────────────────────────────────────────────────
+        // Tire heat glow
         if (_tireGlowSprite != null)
         {
-            // Push glow outward to the outer edge of the car body.
-            // _localOffset.Y sign tells us which side (-=left, +=right).
             float lateralSign = _localOffset.Y < 0f ? -1f : 1f;
             Vector2 localGlowOffset = _localOffset
                 + new Vector2(0f, lateralSign * GlowOutwardPush);
             _tireGlowSprite.GlobalPosition = _car.ToGlobal(localGlowOffset);
-
-            // Rotate so the squished ellipse aligns with the car's heading
             _tireGlowSprite.GlobalRotation = _car.GlobalRotation;
         }
 
@@ -249,12 +241,12 @@ public partial class TireTrail : Node2D
         {
             float current = (float)_tireGlowMat.GetShaderParameter("intensity");
             float target  = shouldEffect ? intensity : 0f;
-            float rate    = shouldEffect ? 8f : 3f;  // ramp up fast, decay slowly
+            float rate    = shouldEffect ? 8f : 3f;
             _tireGlowMat.SetShaderParameter("intensity",
                 Mathf.MoveToward(current, target, rate * dt));
         }
 
-        // ── Tire marks ────────────────────────────────────────────────────────
+        // Tire marks
         if (shouldMark)
         {
             if (!_wasMarking)
@@ -300,7 +292,8 @@ public partial class TireTrail : Node2D
 
             if (alpha <= 0.01f)
             {
-                seg.Line.QueueFree();
+                if (IsInstanceValid(seg.Line))
+                    seg.Line.QueueFree();
                 _trails.RemoveAt(i);
             }
             else
@@ -312,7 +305,8 @@ public partial class TireTrail : Node2D
 
         while (_trails.Count > MaxTrails)
         {
-            _trails[0].Line.QueueFree();
+            if (IsInstanceValid(_trails[0].Line))
+                _trails[0].Line.QueueFree();
             _trails.RemoveAt(0);
         }
     }

@@ -1,41 +1,52 @@
 using Godot;
 
-/// <summary>
-/// Shader-based asphalt ground. Creates a large ColorRect with a procedural
-/// asphalt shader featuring checkerboard tiles, grid lines, dashed lane
-/// markings, noise grit, and wear stains — all GPU-rendered.
-/// 
-/// Place the ground_grid.gdshader file in your project, then assign it via
-/// the ShaderPath export or let this script find it at "res://shaders/ground_grid.gdshader".
-/// </summary>
 public partial class GroundGrid : Node2D
 {
-    [Export] public float WorldSize = 10240f;  // total size in pixels
-    [Export(PropertyHint.File, "*.gdshader")] 
-    public string ShaderPath = "res://shaders/ground_grid.gdshader";
+    private ShaderMaterial _mat;
+    private Node2D _car;
+    
+    // Store the current visual intensity of the brake lights
+    private float _currentBrakeLight = 0f;
 
     public override void _Ready()
     {
-        ZIndex = -10;
+        var poly = GetNode<Polygon2D>("../Background");
+        _mat = poly.Material as ShaderMaterial;
 
-        var rect = new ColorRect();
-        rect.Size = new Vector2(WorldSize, WorldSize);
-        rect.Position = new Vector2(-WorldSize * 0.5f, -WorldSize * 0.5f);
-        rect.Color = new Color(0.15f, 0.15f, 0.18f, 1f);
+        _car = GetNode<Node2D>("../PlayerCar");
+    }
 
-        // Load and apply shader
-        var shaderFile = GD.Load<Shader>(ShaderPath);
-        if (shaderFile != null)
-        {
-            var mat = new ShaderMaterial();
-            mat.Shader = shaderFile;
-            rect.Material = mat;
-        }
-        else
-        {
-            GD.PushWarning($"GroundGrid: Could not load shader at '{ShaderPath}'. Using flat color.");
-        }
+    public override void _Process(double delta)
+    {
+        if (_mat == null || _car == null) return;
 
-        AddChild(rect);
+        var carScript = _car as PlayerCar;
+        if (carScript == null) return;
+
+        // Pass Car Position and Speed
+        _mat.SetShaderParameter("car_pos", _car.GlobalPosition);
+        _mat.SetShaderParameter("car_speed", carScript.TotalSpeed);
+        
+        // Pass Dynamics for the Wake
+        _mat.SetShaderParameter("velocity_dir", carScript.VelocityDirection);
+        _mat.SetShaderParameter("car_drift", carScript.DriftIntensity);
+
+        // 1. Pass positional data
+        _mat.SetShaderParameter("car_pos", _car.GlobalPosition);
+        _mat.SetShaderParameter("car_dir", carScript.ForwardDir);
+
+        // 2. Smooth Brake Light Logic
+        float targetBrakeLight = carScript.IsBraking ? 1.0f : 0.0f;
+        
+        // Lerp the value so the brake lights fade on/off smoothly like real incandescent/LED bulbs
+        _currentBrakeLight = Mathf.Lerp(_currentBrakeLight, targetBrakeLight, 15f * (float)delta);
+        _mat.SetShaderParameter("brake_strength", _currentBrakeLight);
+
+        // 3. Environmental Displacement (If you kept the puddle wake / skid marks)
+        _mat.SetShaderParameter("car_speed", carScript.TotalSpeed);
+        _mat.SetShaderParameter("car_drift", carScript.DriftIntensity);
+        
+        // Ensure screen center is still updated for your vignette or localized effects
+        _mat.SetShaderParameter("screen_center", GetViewport().GetCamera2D().GlobalPosition);
     }
 }

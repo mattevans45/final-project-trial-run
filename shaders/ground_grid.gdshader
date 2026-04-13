@@ -1,36 +1,43 @@
 shader_type canvas_item;
 
-// ── World-anchored asphalt: tiles, grid lines, dashed lane markings, grit ──
-// Attach to a large ColorRect. The varying passes true world-space position
-// from vertex → fragment so the pattern stays fixed as the camera moves.
-
 varying vec2 world_pos;
 
-uniform float tile_size      : hint_range(32.0, 512.0) = 128.0;
-uniform float line_width     : hint_range(0.5, 4.0)    = 1.2;
-uniform float lane_interval  : hint_range(1.0, 16.0)   = 4.0;
-uniform float lane_width     : hint_range(1.0, 6.0)    = 2.5;
-uniform float dash_ratio     : hint_range(0.1, 0.9)    = 0.45;
+// ── Base tiling ─────────────────────────────────────────────────
+uniform float tile_size = 128.0;
+uniform float line_width = 0.6;
 
-uniform vec4 color_a         : source_color = vec4(0.165, 0.165, 0.180, 1.0);
-uniform vec4 color_b         : source_color = vec4(0.137, 0.137, 0.152, 1.0);
-uniform vec4 grid_line_color : source_color = vec4(0.230, 0.230, 0.250, 1.0);
-uniform vec4 lane_color      : source_color = vec4(0.850, 0.780, 0.350, 0.7);
+// ── Colors ──────────────────────────────────────────────────────
+uniform vec4 color_a = vec4(0.135, 0.133, 0.130, 1.0);
+uniform vec4 color_b = vec4(0.128, 0.128, 0.132, 1.0);
+uniform vec4 grid_line_color = vec4(0.165, 0.163, 0.158, 1.0);
 
-uniform float noise_strength : hint_range(0.0, 0.15)  = 0.055;
-uniform float noise_scale    : hint_range(0.001, 0.05) = 0.008;
+// ── Surface detail ───────────────────────────────────────────────
+uniform float noise_strength = 0.022;
+uniform float crack_strength = 0.08;
+uniform float wetness = 1.0; 
 
-// ── Vertex: capture world-space position before the camera transform ──────
+// ── Car Dynamics (For Wake) ──────────────────────────────────────
+uniform vec2 car_pos;
+uniform vec2 velocity_dir = vec2(1.0, 0.0);
+uniform float car_speed = 0.0;
+uniform float car_drift = 0.0;
+
+// ================================================================
+
 void vertex() {
-    // MODEL_MATRIX is local → world (canvas) space for CanvasItem nodes.
     world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 }
 
-// ── Hash / noise helpers ──────────────────────────────────────────────────
+// ── Fast Noise Helpers ───────────────────────────────────────────
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
+}
+
+vec2 hash22(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 43758.5453);
 }
 
 float value_noise(vec2 p) {
@@ -38,80 +45,91 @@ float value_noise(vec2 p) {
     vec2 f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
     return mix(
-        mix(hash21(i),               hash21(i + vec2(1.0, 0.0)), f.x),
+        mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
         mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
         f.y
     );
 }
 
-float fbm(vec2 p) {
-    float v = 0.0, a = 0.5;
-    for (int i = 0; i < 4; i++) { v += a * value_noise(p); p *= 2.1; a *= 0.5; }
+float fbm2(vec2 p) {
+    float v = 0.5 * value_noise(p);
+    v += 0.25 * value_noise(p * 2.17);
     return v;
 }
 
-// ── Fragment ──────────────────────────────────────────────────────────────
+float voronoi_edge(vec2 p) {
+    vec2 n = floor(p);
+    vec2 f = fract(p);
+    float md = 8.0;
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+        vec2 g = vec2(float(i), float(j));
+        vec2 r = g + hash22(n + g) - f;
+        float d = dot(r, r);
+        md = min(md, d);
+    }
+    return md;
+}
+
+// ================================================================
+
 void fragment() {
-    vec2 pos = world_pos;   // true world coordinates — stationary as camera moves
-
-    // ── Tile coordinates ──────────────────────────────────────────────────
+    vec2 pos = world_pos;
     vec2 tile_coord = pos / tile_size;
-    vec2 tile_id    = floor(tile_coord);
-    vec2 tile_frac  = fract(tile_coord);
+    vec2 tile_id = floor(tile_coord);
+    vec2 tile_frac = fract(tile_coord);
 
-    // ── Checkerboard base ─────────────────────────────────────────────────
-    float checker  = mod(tile_id.x + tile_id.y, 2.0);
-    vec4 base_color = mix(color_a, color_b, checker);
+    // ── 1. Asphalt Base ──────────────────────────────────────────
+    float checker = mod(tile_id.x + tile_id.y, 2.0);
+    vec4 col = mix(color_a, color_b, checker * 0.15);
+    col.rgb += (hash21(tile_id) - 0.5) * 0.008;
 
-    // ── Asphalt grit (multi-octave noise) ────────────────────────────────
-    float noise      = fbm(pos * noise_scale);
-    float fine_noise = value_noise(pos * 0.15) * 0.5 + 0.5;
-    base_color.rgb  += (noise      - 0.5) * noise_strength;
-    base_color.rgb  += (fine_noise - 0.5) * noise_strength * 0.3;
+    // Surface texture & cracks
+    col.rgb += (value_noise(pos * 0.18) - 0.5) * noise_strength;
+    float crack = 1.0 - smoothstep(0.0, 0.012, voronoi_edge(pos * 0.05));
+    col.rgb -= crack * crack_strength;
 
-    // Per-tile micro colour variation
-    float tile_var   = hash21(tile_id * 7.31) * 0.03 - 0.015;
-    base_color.rgb  += tile_var;
+    // Macro variation
+    float macro = fbm2(pos * 0.0008);
+    col.rgb *= 1.0 - (macro - 0.5) * 0.08;
 
-    // ── Grid lines ────────────────────────────────────────────────────────
+    // ── 2. The Wake Calculation ──────────────────────────────────
+    vec2 delta = pos - car_pos;
+    float dist = length(delta);
+    
+    // Direction from car to this pixel
+    vec2 dir_to_pixel = delta / (dist + 0.0001);
+    
+    // Check if pixel is behind the car's current movement trajectory
+    float dot_wake = dot(dir_to_pixel, -velocity_dir);
+    
+    // The wake widens dynamically based on how hard the car is drifting
+    float wake_cone_width = mix(0.96, 0.4, car_drift);
+    float wake_shape = smoothstep(wake_cone_width, 1.0, dot_wake);
+    
+    // The wake gets longer the faster you go
+    float wake_length = 50.0 + (car_speed * 0.6);
+    float wake_falloff = 1.0 - smoothstep(0.0, wake_length, dist);
+    
+    // Only apply wake if the car is actually moving
+    float speed_factor = clamp(car_speed * 0.01, 0.0, 1.0);
+    float active_wake = wake_shape * wake_falloff * speed_factor;
+
+    // ── 3. Puddles & Displacement ────────────────────────────────
+    float puddle_noise = fbm2(pos * 0.003 + 100.0);
+    float base_puddle = smoothstep(0.45, 0.7, puddle_noise) * wetness;
+    
+    // Subtract the wake from the puddles (displacing the water)
+    float final_puddle = max(0.0, base_puddle - (active_wake * 1.5));
+    
+    // Wet asphalt is darker than dry asphalt
+    col.rgb *= mix(1.0, 0.65, final_puddle);
+
+    // ── 4. Subtle Grid ───────────────────────────────────────────
     float lh = line_width / tile_size * 0.5;
-    float gx = max(
-        smoothstep(lh + 0.005, lh, abs(tile_frac.x)),
-        smoothstep(lh + 0.005, lh, abs(tile_frac.x - 1.0))
-    );
-    float gy = max(
-        smoothstep(lh + 0.005, lh, abs(tile_frac.y)),
-        smoothstep(lh + 0.005, lh, abs(tile_frac.y - 1.0))
-    );
-    base_color = mix(base_color, grid_line_color, max(gx, gy) * 0.6);
+    vec2 grid_dist = min(tile_frac, 1.0 - tile_frac);
+    float grid_mask = smoothstep(lh + 0.006, lh, min(grid_dist.x, grid_dist.y));
+    col = mix(col, grid_line_color, grid_mask * 0.12);
 
-    // ── Dashed lane markings every lane_interval tiles ────────────────────
-    vec2 lane_id = mod(tile_id, lane_interval);
-
-    if (abs(lane_id.x) < 0.5) {
-        float half_lw  = lane_width / tile_size * 0.5;
-        float lane_mask = max(
-            smoothstep(half_lw + 0.008, half_lw, abs(tile_frac.x)),
-            smoothstep(half_lw + 0.008, half_lw, abs(tile_frac.x - 1.0))
-        );
-        lane_mask *= step(fract(tile_coord.y * 0.5), dash_ratio);
-        base_color = mix(base_color, lane_color, lane_mask * lane_color.a);
-    }
-
-    if (abs(lane_id.y) < 0.5) {
-        float half_lw  = lane_width / tile_size * 0.5;
-        float lane_mask = max(
-            smoothstep(half_lw + 0.008, half_lw, abs(tile_frac.y)),
-            smoothstep(half_lw + 0.008, half_lw, abs(tile_frac.y - 1.0))
-        );
-        lane_mask *= step(fract(tile_coord.x * 0.5), dash_ratio);
-        base_color = mix(base_color, lane_color, lane_mask * lane_color.a);
-    }
-
-    // ── Wear / stain patches ──────────────────────────────────────────────
-    float stain = fbm(pos * 0.003 + 100.0);
-    stain = smoothstep(0.45, 0.55, stain);
-    base_color.rgb = mix(base_color.rgb, base_color.rgb * 0.88, stain * 0.15);
-
-    COLOR = base_color;
+    COLOR = col;
 }

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3 uid="uid://der2e6i1wovnf"]
+
+[ext_resource type="Texture2D" uid="uid://dtubjca2p80jr" path="res://assets/sprite/Viper.png" id="1_cgur4"]
+[ext_resource type="Script" uid="uid://vkk4rndyht2g" path="res://scripts/VehicleData.cs" id="2_mroiy"]
+
+[resource]
+script = ExtResource("2_mroiy")
+DisplayName = "Viper Interceptor"
+Description = "Quickness"
+SpriteTexture = ExtResource("1_cgur4")
+BaseTint = Color(1, 0.6651851, 0.3491902, 1)
+AccentTint = Color(1, 0.9063318, 0, 1)
+GlowColor = Color(1, 0.7372549, 0, 1)
+MaxSpeed = 580.0
+Acceleration = 1100.0
+MaxSteerAngle = 48.0
+HighSpeedSteerReduction = 0.35
+GripFriction = 7.0
+HandbrakeYawRate = 4.8
+KickImpulse = 0.2
+BoostLaunchSpeed = 620.0
+MaxHealth = 60.0
+RamDamage = 20.0
+CollisionSize = Vector2(52, 24)
+metadata/_custom_type_script = "uid://vkk4rndyht2g"

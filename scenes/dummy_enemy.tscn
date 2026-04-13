@@ -10,9 +10,13 @@
 [ext_resource type="Texture2D" uid="uid://dxvwvp0mmra6g" path="res://assets/White/MOVE/SOUTHWEST/White_CIVIC_CLEAN_SOUTHWEST_000-sheet.png" id="8_wp5j6"]
 [ext_resource type="Texture2D" uid="uid://blgq5pslnk164" path="res://assets/White/MOVE/SOUTH/White_CIVIC_CLEAN_SOUTH_000-sheet.png" id="9_tdykn"]
 [ext_resource type="Texture2D" uid="uid://y1q8tl31l1ux" path="res://assets/White/MOVE/SOUTHEAST/White_CIVIC_CLEAN_SOUTHEAST_000-sheet.png" id="10_r8doi"]
+[ext_resource type="Script" uid="uid://co2nn4qw0x4ry" path="res://scripts/Damageable.cs" id="11_lwh7i"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_lpkgh"]
 size = Vector2(40, 40)
+
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_Enemy"]
+polygon = PackedVector2Array(-20, -20, 20, -20, 20, 20, -20, 20)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_tk8mp"]
 atlas = ExtResource("3_tk8mp")
@@ -738,7 +742,13 @@ visible = false
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1655454052]
 shape = SubResource("RectangleShape2D_lpkgh")
 
+[node name="LightOccluder2D" type="LightOccluder2D" parent="." unique_id=1872345901]
+occluder = SubResource("OccluderPolygon2D_Enemy")
+
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=766305404]
 sprite_frames = SubResource("SpriteFrames_ue5po")
 animation = &"EAST"
 script = ExtResource("2_vis")
+
+[node name="Damageable" type="Node" parent="." unique_id=972579210]
+script = ExtResource("11_lwh7i")

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VehicleData" format=3 uid="uid://nyjwplh4yqm0"]
+
+[ext_resource type="Script" uid="uid://vkk4rndyht2g" path="res://scripts/VehicleData.cs" id="1_vhtgs"]
+[ext_resource type="Texture2D" uid="uid://cfjy7wy8n04x1" path="res://assets/sprite/Corolla.png" id="1_wlbuv"]
+
+[resource]
+script = ExtResource("1_vhtgs")
+DisplayName = "Wraith Sedan"
+SpriteTexture = ExtResource("1_wlbuv")
+BaseTint = Color(0.48452926, 0.8808251, 1, 1)
+AccentTint = Color(0.3491902, 0.6651851, 0.95468724, 1)
+GlowColor = Color(0.48452926, 0.85430586, 1, 1)
+metadata/_custom_type_script = "uid://vkk4rndyht2g"
