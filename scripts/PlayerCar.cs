@@ -219,6 +219,16 @@ public partial class PlayerCar : CharacterBody2D
 		if (_glowMat != null)
 			_glowMat.SetShaderParameter("glow_color", data.GlowColor);
 
+		// Headlights — tint to match the vehicle's glow identity
+		foreach (Node child in GetChildren())
+		{
+			if (child is PointLight2D hl && child.Name.ToString().StartsWith("Headlight"))
+			{
+				// Lighten so it reads as "bright light with hue", not a dim tinted blob
+				hl.Color = data.GlowColor.Lightened(0.35f);
+			}
+		}
+
 		// Collision shape
 		var collShape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D");
 		if (collShape?.Shape is RectangleShape2D rect)

@@ -7,8 +7,10 @@
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(56, 28)
 
-[node name="PlayerBicycle" type="RigidBody2D" unique_id=974707162]
-gravity_scale = 0.0
+[node name="PlayerBicycle" type="CharacterBody2D" unique_id=974707162]
+collision_layer = 1
+collision_mask = 6
+motion_mode = 1
 script = ExtResource("1_pbscr")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=2129017138]
@@ -22,3 +24,8 @@ shape = SubResource("RectangleShape2D_1")
 [node name="Camera2D" type="Camera2D" parent="."]
 script = ExtResource("3_cam")
 TargetPath = NodePath("..")
+UseDynamicZoom = true
+ZoomIdle = 1.2
+ZoomFast = 1.0
+ZoomFullSpeed = 420.0
+ZoomSharpness = 1.8

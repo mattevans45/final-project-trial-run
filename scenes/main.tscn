@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://b751klfkbogf1" path="res://scenes/player_car.tscn" id="5_lquwl"]
 [ext_resource type="Script" uid="uid://rmhf6alg11qw" path="res://scripts/GroundGrid.cs" id="6_ground"]
 [ext_resource type="Script" uid="uid://brrtmv2y6bwfa" path="res://scripts/ArenaLevel.cs" id="7_arena"]
+[ext_resource type="Script" path="res://scripts/PlayerSwapper.cs" id="8_swap"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_tefeu"]
 shader = ExtResource("2_tbgi4")
@@ -39,6 +40,9 @@ light_mask = 3
 z_index = 1
 texture_filter = 1
 script = ExtResource("7_arena")
+
+[node name="PlayerSwapper" type="Node" parent="."]
+script = ExtResource("8_swap")
 
 [node name="DummyEnemy" parent="." unique_id=1514734667 instance=ExtResource("2_enemy")]
 position = Vector2(200, -300)

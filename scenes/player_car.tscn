@@ -55,6 +55,7 @@ shader_parameter/heat_color = Color(1, 0.3, 0.05, 1)
 shader_parameter/intensity = 0.0
 
 [node name="PlayerCar" type="CharacterBody2D" unique_id=142772476]
+scale = Vector2(1.5, 1.5)
 collision_mask = 6
 script = ExtResource("1_54ksr")
 

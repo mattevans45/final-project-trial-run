@@ -24,12 +24,21 @@ public partial class VehicleSelectScreen : Control
     private static readonly Color TextDim     = new(0.5f, 0.55f, 0.6f);
     private static readonly Color TextBright  = new(0.9f, 0.95f, 1.0f);
 
+    // Controller types available for testing
+    private static readonly (string Label, string Scene, string Hint)[] Controllers =
+    {
+        ("CAR",       "res://scenes/player_car.tscn",      "Arcade CharacterBody2D — full drift physics"),
+        ("BICYCLE",   "res://scenes/player_bicycle.tscn",  "Ackermann RigidBody2D — traction-loss model"),
+        ("PROTOTYPE", "res://scenes/player.tscn",          "Simple RigidBody2D — isometric feel"),
+    };
+
     private int _selectedIndex = 0;
+    private int _controllerIndex = 0;
     private List<VehicleData> _vehicles;
-    private VBoxContainer _cardContainer;
     private HBoxContainer _cardsRow;
     private Label _descriptionLabel;
     private List<Panel> _cards = new();
+    private List<Button> _ctrlButtons = new();
 
     public override void _Ready()
     {
@@ -42,11 +51,11 @@ public partial class VehicleSelectScreen : Control
         // Main vertical layout
         var vbox = new VBoxContainer();
         vbox.SetAnchorsPreset(LayoutPreset.FullRect);
-        vbox.AddThemeConstantOverride("separation", 30);
+        vbox.AddThemeConstantOverride("separation", 12);
         vbox.Set("offset_left", 60f);
         vbox.Set("offset_right", -60f);
-        vbox.Set("offset_top", 40f);
-        vbox.Set("offset_bottom", -40f);
+        vbox.Set("offset_top", 20f);
+        vbox.Set("offset_bottom", -20f);
         AddChild(vbox);
 
         // Title
@@ -65,9 +74,12 @@ public partial class VehicleSelectScreen : Control
         subtitle.AddThemeFontSizeOverride("font_size", 14);
         vbox.AddChild(subtitle);
 
+        // ── Controller-type row ──────────────────────────────────────────────
+        _BuildControllerRow(vbox);
+
         // Spacer
         var spacer1 = new Control();
-        spacer1.CustomMinimumSize = new Vector2(0, 10);
+        spacer1.CustomMinimumSize = new Vector2(0, 4);
         vbox.AddChild(spacer1);
 
         // Cards row (centered)
@@ -89,7 +101,7 @@ public partial class VehicleSelectScreen : Control
 
         // Controls hint
         var hint = new Label();
-        hint.Text = "← → SELECT  |  ENTER CONFIRM  |  ESC BACK";
+        hint.Text = "← → SELECT VEHICLE  |  1 / 2 / 3 CONTROLLER  |  ENTER CONFIRM";
         hint.HorizontalAlignment = HorizontalAlignment.Center;
         hint.AddThemeColorOverride("font_color", new Color(TextDim, 0.5f));
         hint.AddThemeFontSizeOverride("font_size", 13);
@@ -110,10 +122,70 @@ public partial class VehicleSelectScreen : Control
         _UpdateSelection();
     }
 
+    private void _BuildControllerRow(VBoxContainer parent)
+    {
+        var rowLabel = new Label();
+        rowLabel.Text = "CONTROLLER TYPE";
+        rowLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        rowLabel.AddThemeColorOverride("font_color", TextDim);
+        rowLabel.AddThemeFontSizeOverride("font_size", 12);
+        parent.AddChild(rowLabel);
+
+        var center = new CenterContainer();
+        parent.AddChild(center);
+
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        center.AddChild(row);
+
+        for (int i = 0; i < Controllers.Length; i++)
+        {
+            int captured = i;
+            var btn = new Button();
+            btn.Text = $"[{i + 1}] {Controllers[i].Label}";
+            btn.CustomMinimumSize = new Vector2(160, 32);
+            btn.Pressed += () => _SelectController(captured);
+            row.AddChild(btn);
+            _ctrlButtons.Add(btn);
+        }
+
+        _UpdateControllerButtons();
+    }
+
+    private void _SelectController(int index)
+    {
+        _controllerIndex = index;
+        if (VehicleRegistry.Instance != null)
+            VehicleRegistry.Instance.SelectedPlayerScene = Controllers[index].Scene;
+        _UpdateControllerButtons();
+    }
+
+    private void _UpdateControllerButtons()
+    {
+        for (int i = 0; i < _ctrlButtons.Count; i++)
+        {
+            var btn = _ctrlButtons[i];
+            if (i == _controllerIndex)
+            {
+                btn.AddThemeColorOverride("font_color", AccentCyan);
+                btn.Modulate = Colors.White;
+            }
+            else
+            {
+                btn.RemoveThemeColorOverride("font_color");
+                btn.Modulate = new Color(1, 1, 1, 0.45f);
+            }
+        }
+
+        if (_descriptionLabel != null && _selectedIndex >= 0 && _selectedIndex < (_vehicles?.Count ?? 0))
+            _descriptionLabel.Text = _vehicles[_selectedIndex].Description
+                + $"\n[Controller: {Controllers[_controllerIndex].Hint}]";
+    }
+
     private void _BuildCard(VehicleData data, int index)
     {
         var card = new Panel();
-        card.CustomMinimumSize = new Vector2(CardWidth, 360);
+        card.CustomMinimumSize = new Vector2(CardWidth, 300);
 
         var stylebox = new StyleBoxFlat();
         stylebox.BgColor = PanelBg;
@@ -132,11 +204,11 @@ public partial class VehicleSelectScreen : Control
         // Inner layout
         var inner = new VBoxContainer();
         inner.SetAnchorsPreset(LayoutPreset.FullRect);
-        inner.Set("offset_left", 16f);
-        inner.Set("offset_right", -16f);
-        inner.Set("offset_top", 16f);
-        inner.Set("offset_bottom", -16f);
-        inner.AddThemeConstantOverride("separation", 8);
+        inner.Set("offset_left", 14f);
+        inner.Set("offset_right", -14f);
+        inner.Set("offset_top", 12f);
+        inner.Set("offset_bottom", -12f);
+        inner.AddThemeConstantOverride("separation", 6);
         card.AddChild(inner);
 
         // Vehicle name
@@ -163,7 +235,7 @@ public partial class VehicleSelectScreen : Control
 
         // Spacer
         var spacer = new Control();
-        spacer.CustomMinimumSize = new Vector2(0, 8);
+        spacer.CustomMinimumSize = new Vector2(0, 4);
         inner.AddChild(spacer);
 
         // Stat bars
@@ -236,30 +308,37 @@ public partial class VehicleSelectScreen : Control
         }
 
         if (_selectedIndex >= 0 && _selectedIndex < _vehicles.Count)
-            _descriptionLabel.Text = _vehicles[_selectedIndex].Description;
+            _descriptionLabel.Text = _vehicles[_selectedIndex].Description
+                + $"\n[Controller: {Controllers[_controllerIndex].Hint}]";
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is InputEventKey key && key.Pressed)
+        if (@event is not InputEventKey key || !key.Pressed) return;
+
+        // Vehicle selection
+        if (key.Keycode == Key.Right || key.Keycode == Key.D)
         {
-            if (key.Keycode == Key.Right || key.Keycode == Key.D)
-            {
-                _selectedIndex = (_selectedIndex + 1) % _vehicles.Count;
-                _UpdateSelection();
-                GetViewport().SetInputAsHandled();
-            }
-            else if (key.Keycode == Key.Left || key.Keycode == Key.A)
-            {
-                _selectedIndex = (_selectedIndex - 1 + _vehicles.Count) % _vehicles.Count;
-                _UpdateSelection();
-                GetViewport().SetInputAsHandled();
-            }
-            else if (key.Keycode == Key.Enter || key.Keycode == Key.Space)
-            {
-                GetViewport().SetInputAsHandled();
-                _ConfirmSelection();
-            }
+            _selectedIndex = (_selectedIndex + 1) % _vehicles.Count;
+            _UpdateSelection();
+            _UpdateControllerButtons();
+            GetViewport().SetInputAsHandled();
+        }
+        else if (key.Keycode == Key.Left || key.Keycode == Key.A)
+        {
+            _selectedIndex = (_selectedIndex - 1 + _vehicles.Count) % _vehicles.Count;
+            _UpdateSelection();
+            _UpdateControllerButtons();
+            GetViewport().SetInputAsHandled();
+        }
+        // Controller-type shortcuts: 1 = Car, 2 = Bicycle, 3 = Prototype
+        else if (key.Keycode == Key.Key1) { _SelectController(0); GetViewport().SetInputAsHandled(); }
+        else if (key.Keycode == Key.Key2) { _SelectController(1); GetViewport().SetInputAsHandled(); }
+        else if (key.Keycode == Key.Key3) { _SelectController(2); GetViewport().SetInputAsHandled(); }
+        else if (key.Keycode == Key.Enter || key.Keycode == Key.Space)
+        {
+            GetViewport().SetInputAsHandled();
+            _ConfirmSelection();
         }
     }
 

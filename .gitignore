@@ -12,6 +12,8 @@ obj/
 *.tmp
 *.log
 
-# Large art packs (exclude from repo for now)
-assets/White/
+# Large art packs — individual animation frames, exclude from repo
+# The consolidated spritesheets at assets/White/*.png are still tracked.
+assets/White/MOVE/
+assets/White/SEPARATED/
 assets/sprite/

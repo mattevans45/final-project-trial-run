@@ -16,6 +16,12 @@ public partial class VehicleRegistry : Node
     public VehicleData SelectedVehicle { get; private set; }
     public List<VehicleData> AllVehicles { get; private set; } = new();
 
+    /// <summary>
+    /// Scene path for the player controller to spawn in the arena.
+    /// Changed by VehicleSelectScreen's controller-type row.
+    /// </summary>
+    public string SelectedPlayerScene { get; set; } = "res://scenes/player_car.tscn";
+
     public override void _Ready()
     {
         Instance = this;
