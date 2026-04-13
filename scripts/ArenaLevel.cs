@@ -28,6 +28,7 @@ public partial class ArenaLevel : Node2D
         _BuildContainers();
         _BuildDebris();
         _BuildGroundMarkings();
+        _BuildGlobalLight();
     }
 
     // ── Walls with properly-sized hazard stripes ─────────────────────────────
@@ -329,5 +330,24 @@ public partial class ArenaLevel : Node2D
                 }
             }
         };
+    }
+
+    // ── Global Lighting ──────────────────────────────────────────────────────
+// ── Global Lighting ──────────────────────────────────────────────────────
+    private void _BuildGlobalLight()
+    {
+        var sun = new DirectionalLight2D
+        {
+            Color  = new Color(0.45f, 0.55f, 0.75f), 
+            Energy = 0.85f, 
+            Height = 60f,   
+
+            // CHANGE THIS TO FALSE
+            // This prevents the arena walls from acting like a giant roof!
+            ShadowEnabled = false, 
+        };
+
+        sun.Rotation = Mathf.DegToRad(-45f);
+        AddChild(sun);
     }
 }

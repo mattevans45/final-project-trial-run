@@ -17,8 +17,8 @@ shader_parameter/color_b = Color(0.128, 0.128, 0.132, 1)
 shader_parameter/grid_line_color = Color(0.165, 0.163, 0.158, 1)
 shader_parameter/reflection_tint = Color(0.06, 0.18, 0.36, 1)
 shader_parameter/arena_half_size = Vector2(1200, 900)
-shader_parameter/noise_strength = 0.012
-shader_parameter/crack_strength = 0.018
+shader_parameter/noise_strength = 0.065
+shader_parameter/crack_strength = 0.18
 shader_parameter/wetness = 1.0
 shader_parameter/oil_slick_strength = 0.4
 shader_parameter/game_time = 0.0
@@ -34,6 +34,7 @@ z_index = -100
 texture_filter = 1
 material = SubResource("ShaderMaterial_tefeu")
 color = Color(0.1795283, 0.19987568, 0.2540791, 1)
+antialiased = true
 polygon = PackedVector2Array(-6000, -6000, 6000, -6000, 6000, 6000, -6000, 6000)
 
 [node name="ArenaLevel" type="Node2D" parent="." unique_id=1757115488]
