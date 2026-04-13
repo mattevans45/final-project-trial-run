@@ -21,6 +21,10 @@ using Godot;
 /// </summary>
 public partial class GroundGrid : Node2D
 {
+    // ── Singleton ─────────────────────────────────────────────────────────────
+    /// <summary>Live reference set in _Ready. Used by SurfaceDetector.</summary>
+    public static GroundGrid Instance { get; private set; }
+
     // ── Arena dimensions must match ArenaLevel export values ─────────────────
     private static readonly Vector2 ArenaHalfSize = new(1200f, 900f);
 
@@ -28,6 +32,9 @@ public partial class GroundGrid : Node2D
     private Node2D         _car;
     private float          _currentBrakeLight;
     private float          _time;
+
+    // Stored so SurfaceDetector can query puddle/oil intensity at runtime
+    private FastNoiseLite _puddleNoise;
 
     // Trail splat map nodes
     private SubViewport _trailViewport;
@@ -37,6 +44,8 @@ public partial class GroundGrid : Node2D
 
     public override void _Ready()
     {
+        Instance = this;
+
         var poly = GetNode<Polygon2D>("../Background");
         _mat = poly.Material as ShaderMaterial;
 
@@ -55,15 +64,15 @@ public partial class GroundGrid : Node2D
     // ── Noise texture baking ─────────────────────────────────────────────────
 
     /// <summary>Smooth simplex: soft organic blobs, ideal for puddle shapes.</summary>
-    private static ImageTexture _BakeSimplex(int size)
+    private ImageTexture _BakeSimplex(int size)
     {
-        var fn = new FastNoiseLite
+        _puddleNoise = new FastNoiseLite
         {
-            NoiseType     = FastNoiseLite.NoiseTypeEnum.SimplexSmooth,
-            Frequency     = 0.004f,
+            NoiseType      = FastNoiseLite.NoiseTypeEnum.SimplexSmooth,
+            Frequency      = 0.004f,
             FractalOctaves = 4,
         };
-        return _NoiseToTexture(fn, size);
+        return _NoiseToTexture(_puddleNoise, size);
     }
 
     /// <summary>Cellular distance: produces crack/pore patterns for asphalt detail.</summary>
@@ -238,4 +247,57 @@ public partial class GroundGrid : Node2D
         if (cam != null)
             _mat.SetShaderParameter("screen_center", cam.GlobalPosition);
     }
+
+    // ── Surface queries (used by SurfaceDetector) ─────────────────────────────
+
+    /// <summary>
+    /// Returns 0–1 oil-slick intensity at <paramref name="worldPos"/> by
+    /// replicating the shader's hash21 + noise cell test.
+    /// </summary>
+    public float GetOilIntensity(Vector2 worldPos)
+    {
+        var cell = new Vector2(
+            Mathf.Floor(worldPos.X * 0.00115f + 77.3f),
+            Mathf.Floor(worldPos.Y * 0.00115f + 91.1f));
+        float cellHash = _Hash21(cell);
+        if (cellHash < 0.82f) return 0f;          // not an oil cell at all
+
+        // Shader UV: pos * 0.0018 → pixel coord: worldPos * (0.0018 * 512) = worldPos * 0.9216
+        float oilN = _puddleNoise != null
+            ? _puddleNoise.GetNoise2D(worldPos.X * 0.9216f + 281.6f,
+                                       worldPos.Y * 0.9216f + 168.9f) * 0.5f + 0.5f
+            : 0.63f;
+        return Mathf.SmoothStep(0.55f, 0.72f, oilN)
+             * Mathf.SmoothStep(0.82f, 0.88f, cellHash);
+    }
+
+    /// <summary>
+    /// Returns 0–1 puddle intensity at <paramref name="worldPos"/> using the
+    /// same two-octave simplex blend as the shader (no domain warp, close enough
+    /// for gameplay hit-detection).
+    /// </summary>
+    public float GetPuddleIntensity(Vector2 worldPos)
+    {
+        if (_puddleNoise == null) return 0f;
+        // Shader UV: pos * 0.00170 → pixel coord: worldPos * (0.00170 * 512) = worldPos * 0.8704
+        // Shader UV: pos * 0.00420 → pixel coord: worldPos * (0.00420 * 512) = worldPos * 2.1504
+        // Offsets are UV-space offsets (e.g. vec2(0.30,0.70)) scaled to pixels (×512)
+        float n1 = _puddleNoise.GetNoise2D(worldPos.X * 0.8704f + 153.6f,
+                                            worldPos.Y * 0.8704f + 358.4f) * 0.5f + 0.5f;
+        float n2 = _puddleNoise.GetNoise2D(worldPos.X * 2.1504f + 358.4f,
+                                            worldPos.Y * 2.1504f + 102.4f) * 0.5f + 0.5f;
+        return Mathf.SmoothStep(0.58f, 0.76f, n1 * 0.65f + n2 * 0.35f);
+    }
+
+    // ── Hash helpers ─────────────────────────────────────────────────────────
+
+    private static float _Hash21(Vector2 p)
+    {
+        float px = _Fract(p.X * 123.34f);
+        float py = _Fract(p.Y * 456.21f);
+        float d  = px * (px + 45.32f) + py * (py + 45.32f);
+        return _Fract((px + d) * (py + d));
+    }
+
+    private static float _Fract(float x) => x - Mathf.Floor(x);
 }

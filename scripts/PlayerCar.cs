@@ -84,6 +84,11 @@ public partial class PlayerCar : CharacterBody2D
 	private bool _wasHandbraking;
 	private float _boostCharge;
 	private bool _isBurningOut;
+
+	// ── Surface effects ───────────────────────────────────────────────────
+	private SurfaceDetector _surfaceDetector;
+	private float _oilTractionMul = 1f;   // approaches 0.20 on oil, 1.0 off
+
 	public Vector2 VelocityDirection => Velocity.Length() > 1f ? Velocity.Normalized() : Transform.X;
 	public override void _Ready()
 	{
@@ -105,6 +110,14 @@ public partial class PlayerCar : CharacterBody2D
 		// Connect impact signal to camera (decoupled)
 		if (_camera != null)
 			Impact += (intensity) => _camera.AddTrauma(intensity);
+
+		// ── Surface detector & particle effects ───────────────────────────────
+		var sd = new SurfaceDetector { Name = "SurfaceDetector" };
+		AddChild(sd);
+		_surfaceDetector = sd;
+
+		var sp = new SurfaceParticles { Name = "SurfaceParticles" };
+		AddChild(sp);
 
 		// ── Headlight setup ──────────────────────────────────────────────────────
 		// Position is left to the inspector (no override here). Place each
@@ -493,6 +506,12 @@ public partial class PlayerCar : CharacterBody2D
 		{
 			targetFriction = baseFriction;
 		}
+
+		// ── Oil-slick traction loss ────────────────────────────────────────
+		// When on oil the target friction is cut to ~20 %, making the car slide.
+		float targetOilMul = (_surfaceDetector?.IsOnOil ?? false) ? 0.20f : 1f;
+		_oilTractionMul    = Mathf.Lerp(_oilTractionMul, targetOilMul, 4f * dt);
+		targetFriction    *= _oilTractionMul;
 
 		_friction = Mathf.Lerp(_friction, targetFriction, 10f * dt);
 

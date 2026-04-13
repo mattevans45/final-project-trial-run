@@ -5,22 +5,23 @@
 [ext_resource type="PackedScene" uid="uid://b751klfkbogf1" path="res://scenes/player_car.tscn" id="5_lquwl"]
 [ext_resource type="Script" uid="uid://rmhf6alg11qw" path="res://scripts/GroundGrid.cs" id="6_ground"]
 [ext_resource type="Script" uid="uid://brrtmv2y6bwfa" path="res://scripts/ArenaLevel.cs" id="7_arena"]
-[ext_resource type="Script" path="res://scripts/PlayerSwapper.cs" id="8_swap"]
+[ext_resource type="Script" uid="uid://buk8saylyn0in" path="res://scripts/PlayerSwapper.cs" id="8_swap"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_tefeu"]
 shader = ExtResource("2_tbgi4")
 shader_parameter/tile_size = 2048.0
 shader_parameter/line_width = 0.6
-shader_parameter/color_a = Vector4(0.135, 0.133, 0.13, 1)
-shader_parameter/color_b = Vector4(0.128, 0.128, 0.132, 1)
-shader_parameter/grid_line_color = Vector4(0.165, 0.163, 0.158, 1)
+shader_parameter/camera_zoom = 1.0
+shader_parameter/color_a = Color(0.135, 0.133, 0.13, 1)
+shader_parameter/color_b = Color(0.128, 0.128, 0.132, 1)
+shader_parameter/grid_line_color = Color(0.165, 0.163, 0.158, 1)
+shader_parameter/reflection_tint = Color(0.06, 0.18, 0.36, 1)
+shader_parameter/arena_half_size = Vector2(1200, 900)
 shader_parameter/noise_strength = 0.012
 shader_parameter/crack_strength = 0.018
 shader_parameter/wetness = 1.0
-shader_parameter/car_pos = Vector2(0, 0)
-shader_parameter/velocity_dir = Vector2(1, 0)
-shader_parameter/car_speed = 0.0
-shader_parameter/car_drift = 0.0
+shader_parameter/oil_slick_strength = 0.4
+shader_parameter/game_time = 0.0
 
 [node name="main" type="Node2D" unique_id=21675825]
 
@@ -32,7 +33,7 @@ script = ExtResource("6_ground")
 z_index = -100
 texture_filter = 1
 material = SubResource("ShaderMaterial_tefeu")
-color = Color(0.08, 0.09, 0.12, 1)
+color = Color(0.1795283, 0.19987568, 0.2540791, 1)
 polygon = PackedVector2Array(-6000, -6000, 6000, -6000, 6000, 6000, -6000, 6000)
 
 [node name="ArenaLevel" type="Node2D" parent="." unique_id=1757115488]
@@ -41,7 +42,7 @@ z_index = 1
 texture_filter = 1
 script = ExtResource("7_arena")
 
-[node name="PlayerSwapper" type="Node" parent="."]
+[node name="PlayerSwapper" type="Node" parent="." unique_id=1988315834]
 script = ExtResource("8_swap")
 
 [node name="DummyEnemy" parent="." unique_id=1514734667 instance=ExtResource("2_enemy")]
